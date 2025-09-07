@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/fantasydb
+    url: jdbc:postgresql://localhost:5433/fantasydb
     username: ${DB_USER}
     password: ${DB_PASSWORD}
   jpa:
