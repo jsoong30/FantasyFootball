@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Teams</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand"><span style="margin-right:8px;">🏈</span><a th:href="@{/}">FantasyFootball</a></div>
+        <nav class="nav">
+            <a th:href="@{/players}">Players</a>
+            <a th:href="@{/teams}" aria-current="page">Teams</a>
+            <a th:href="@{/stats}">Stats</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0;">
+    <h1 style="margin:0 0 10px;">Teams</h1>
+    <p class="muted">Total: <span th:text="${teamCount}">0</span></p>
+
+    <div class="card">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+            <tr>
+                <th style="text-align:left; padding:8px 6px;">Code</th>
+                <th style="text-align:left; padding:8px 6px;">City</th>
+                <th style="text-align:left; padding:8px 6px;">Name</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="t : ${teams}">
+                <td style="padding:8px 6px;" th:text="${t.code}">KC</td>
+                <td style="padding:8px 6px;" th:text="${t.city}">Kansas City</td>
+                <td style="padding:8px 6px;" th:text="${t.name}">Chiefs</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(teams)}">
+                <td colspan="3" class="muted" style="padding:12px 6px;">No teams yet.</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+</body>
+</html>
