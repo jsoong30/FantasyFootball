@@ -10,5 +10,6 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./fantasy-football/Data_2024:/import
 volumes:
   pgdata:
