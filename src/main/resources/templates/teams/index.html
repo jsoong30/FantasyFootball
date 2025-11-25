@@ -27,14 +27,12 @@
             <thead>
             <tr>
                 <th style="text-align:left; padding:8px 6px;">Code</th>
-                <th style="text-align:left; padding:8px 6px;">City</th>
                 <th style="text-align:left; padding:8px 6px;">Name</th>
             </tr>
             </thead>
             <tbody>
             <tr th:each="t : ${teams}">
                 <td style="padding:8px 6px;" th:text="${t.code}">KC</td>
-                <td style="padding:8px 6px;" th:text="${t.city}">Kansas City</td>
                 <td style="padding:8px 6px;" th:text="${t.name}">Chiefs</td>
             </tr>
             <tr th:if="${#lists.isEmpty(teams)}">
