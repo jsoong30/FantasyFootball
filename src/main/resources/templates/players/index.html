@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Players</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand"><span style="margin-right:8px;">🏈</span><a th:href="@{/}">FantasyFootball</a></div>
+        <nav class="nav">
+            <a th:href="@{/players}" aria-current="page">Players</a>
+            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/stats}">Stats</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0;">
+    <h1 style="margin:0 0 10px;">Players</h1>
+    <p class="muted">Total: <span th:text="${playerCount}">0</span></p>
+
+    <!-- Position filter -->
+    <div style="margin-bottom:16px;">
+        <form method="get" th:action="@{/players}" style="display:flex; gap:8px; align-items:center;">
+            <select name="position" style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);">
+                <option value="" th:selected="${selectedPosition == ''}">All Positions</option>
+                <option value="QB" th:selected="${selectedPosition == 'QB'}">QB</option>
+                <option value="RB" th:selected="${selectedPosition == 'RB'}">RB</option>
+                <option value="WR" th:selected="${selectedPosition == 'WR'}">WR</option>
+                <option value="TE" th:selected="${selectedPosition == 'TE'}">TE</option>
+                <option value="K"  th:selected="${selectedPosition == 'K'}">K</option>
+                <option value="DST" th:selected="${selectedPosition == 'DST'}">DST</option>
+            </select>
+            <button type="submit" class="btn primary" style="padding:8px 16px;">Filter</button>
+            <a th:href="@{/players}" class="btn" style="padding:8px 16px;">Clear</a>
+        </form>
+    </div>
+
+    <div class="card">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+            <tr>
+                <th style="text-align:left; padding:8px 6px;">Name</th>
+                <th style="text-align:left; padding:8px 6px;">Position</th>
+                <th style="text-align:left; padding:8px 6px;">Team</th>
+                <th style="text-align:left; padding:8px 6px;">Season</th>
+                <th style="text-align:left; padding:8px 6px;">Bye</th>
+                <th style="text-align:left; padding:8px 6px;">Age</th>
+                <th style="text-align:left; padding:8px 6px;">Depth</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="p : ${players}">
+                <td style="padding:8px 6px;" th:text="${p.fullName}">Player Name</td>
+                <td style="padding:8px 6px;">
+                    <span th:text="${p.position}"
+                          style="font-weight:600; color:var(--brand);">QB</span>
+                </td>
+                <td style="padding:8px 6px;" th:text="${p.team != null ? p.team.code : '—'}">KC</td>
+                <td style="padding:8px 6px;" th:text="${p.season != null ? p.season : '—'}">2024</td>
+                <td style="padding:8px 6px;" th:text="${p.byeWeek != null ? p.byeWeek : '—'}">7</td>
+                <td style="padding:8px 6px;" th:text="${p.age != null ? p.age : '—'}">28</td>
+                <td style="padding:8px 6px;" th:text="${p.depth != null ? p.depth : '—'}">1</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(players)}">
+                <td colspan="7" class="muted" style="padding:12px 6px;">No players found.</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
+    </div>
+</footer>
+</body>
+</html>
