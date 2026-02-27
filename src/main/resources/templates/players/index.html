@@ -24,14 +24,14 @@
 
     <!-- Position filter -->
     <div style="margin-bottom:16px;">
-        <form method="get" th:action="@{/players}" style="display:flex; gap:8px; align-items:center;">
+        <form method="get" th:action="@{/players}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <select name="position" style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);">
                 <option value="" th:selected="${selectedPosition == ''}">All Positions</option>
-                <option value="QB" th:selected="${selectedPosition == 'QB'}">QB</option>
-                <option value="RB" th:selected="${selectedPosition == 'RB'}">RB</option>
-                <option value="WR" th:selected="${selectedPosition == 'WR'}">WR</option>
-                <option value="TE" th:selected="${selectedPosition == 'TE'}">TE</option>
-                <option value="K"  th:selected="${selectedPosition == 'K'}">K</option>
+                <option value="QB"  th:selected="${selectedPosition == 'QB'}">QB</option>
+                <option value="RB"  th:selected="${selectedPosition == 'RB'}">RB</option>
+                <option value="WR"  th:selected="${selectedPosition == 'WR'}">WR</option>
+                <option value="TE"  th:selected="${selectedPosition == 'TE'}">TE</option>
+                <option value="K"   th:selected="${selectedPosition == 'K'}">K</option>
                 <option value="DST" th:selected="${selectedPosition == 'DST'}">DST</option>
             </select>
             <button type="submit" class="btn primary" style="padding:8px 16px;">Filter</button>
@@ -39,34 +39,60 @@
         </form>
     </div>
 
-    <div class="card">
-        <table style="width:100%; border-collapse:collapse;">
+    <div class="card" style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; min-width:700px;">
             <thead>
-            <tr>
+            <tr style="border-bottom:1px solid var(--border);">
+                <th style="text-align:left; padding:8px 6px;">Rank</th>
                 <th style="text-align:left; padding:8px 6px;">Name</th>
-                <th style="text-align:left; padding:8px 6px;">Position</th>
+                <th style="text-align:left; padding:8px 6px;">Pos</th>
                 <th style="text-align:left; padding:8px 6px;">Team</th>
-                <th style="text-align:left; padding:8px 6px;">Season</th>
-                <th style="text-align:left; padding:8px 6px;">Bye</th>
-                <th style="text-align:left; padding:8px 6px;">Age</th>
-                <th style="text-align:left; padding:8px 6px;">Depth</th>
+                <th style="text-align:right; padding:8px 6px;">Pts</th>
+                <th style="text-align:right; padding:8px 6px;">Pass Yds</th>
+                <th style="text-align:right; padding:8px 6px;">Pass TD</th>
+                <th style="text-align:right; padding:8px 6px;">Rush Yds</th>
+                <th style="text-align:right; padding:8px 6px;">Rush TD</th>
+                <th style="text-align:right; padding:8px 6px;">Rec</th>
+                <th style="text-align:right; padding:8px 6px;">Rec Yds</th>
+                <th style="text-align:right; padding:8px 6px;">Rec TD</th>
+                <th style="text-align:right; padding:8px 6px;">FG</th>
             </tr>
             </thead>
             <tbody>
-            <tr th:each="p : ${players}">
-                <td style="padding:8px 6px;" th:text="${p.fullName}">Player Name</td>
+            <tr th:each="p : ${players}" th:with="s=${statsMap[p.id]}"
+                style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 6px; color:var(--muted);"
+                    th:text="${s != null and s.rank != null ? s.rank : '—'}">1</td>
+                <td style="padding:8px 6px; font-weight:600;" th:text="${p.fullName}">Player Name</td>
                 <td style="padding:8px 6px;">
-                    <span th:text="${p.position}"
-                          style="font-weight:600; color:var(--brand);">QB</span>
+                    <span th:text="${p.position}" style="font-weight:700; color:var(--brand);">QB</span>
                 </td>
                 <td style="padding:8px 6px;" th:text="${p.team != null ? p.team.code : '—'}">KC</td>
-                <td style="padding:8px 6px;" th:text="${p.season != null ? p.season : '—'}">2024</td>
-                <td style="padding:8px 6px;" th:text="${p.byeWeek != null ? p.byeWeek : '—'}">7</td>
-                <td style="padding:8px 6px;" th:text="${p.age != null ? p.age : '—'}">28</td>
-                <td style="padding:8px 6px;" th:text="${p.depth != null ? p.depth : '—'}">1</td>
+                <td style="padding:8px 6px; text-align:right; font-weight:600;"
+                    th:text="${s != null and s.totalPoints != null ? #numbers.formatDecimal(s.totalPoints,1,2) : '—'}">0.00</td>
+                <!-- Passing -->
+                <td style="padding:8px 6px; text-align:right;"
+                    th:text="${s != null and s.passingYds != null ? s.passingYds : '—'}">—</td>
+                <td style="padding:8px 6px; text-align:right;"
+                    th:text="${s != null and s.passingTd != null ? s.passingTd : '—'}">—</td>
+                <!-- Rushing -->
+                <td style="padding:8px 6px; text-align:right;"
+                    th:text="${s != null and s.rushingYds != null ? s.rushingYds : '—'}">—</td>
+                <td style="padding:8px 6px; text-align:right;"
+                    th:text="${s != null and s.rushingTd != null ? s.rushingTd : '—'}">—</td>
+                <!-- Receiving -->
+                <td style="padding:8px 6px; text-align:right;"
+                    th:text="${s != null and s.receivingRec != null ? s.receivingRec : '—'}">—</td>
+                <td style="padding:8px 6px; text-align:right;"
+                    th:text="${s != null and s.receivingYds != null ? s.receivingYds : '—'}">—</td>
+                <td style="padding:8px 6px; text-align:right;"
+                    th:text="${s != null and s.receivingTd != null ? s.receivingTd : '—'}">—</td>
+                <!-- Kicker -->
+                <td style="padding:8px 6px; text-align:right;"
+                    th:text="${s != null and s.patMade != null ? s.totalFgMade() : '—'}">—</td>
             </tr>
             <tr th:if="${#lists.isEmpty(players)}">
-                <td colspan="7" class="muted" style="padding:12px 6px;">No players found.</td>
+                <td colspan="13" class="muted" style="padding:12px 6px;">No players found.</td>
             </tr>
             </tbody>
         </table>
