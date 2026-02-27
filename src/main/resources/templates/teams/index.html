@@ -19,28 +19,49 @@
 </header>
 
 <main class="container" style="padding:24px 0;">
-    <h1 style="margin:0 0 10px;">Teams</h1>
-    <p class="muted">Total: <span th:text="${teamCount}">0</span></p>
+    <h1 style="margin:0 0 6px;">Teams</h1>
+    <p class="muted" style="margin:0 0 16px;">
+        <span th:text="${teamCount}">0</span> teams
+    </p>
 
-    <div class="card">
-        <table style="width:100%; border-collapse:collapse;">
-            <thead>
-            <tr>
-                <th style="text-align:left; padding:8px 6px;">Code</th>
-                <th style="text-align:left; padding:8px 6px;">Name</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="t : ${teams}">
-                <td style="padding:8px 6px;" th:text="${t.code}">KC</td>
-                <td style="padding:8px 6px;" th:text="${t.name}">Chiefs</td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(teams)}">
-                <td colspan="3" class="muted" style="padding:12px 6px;">No teams yet.</td>
-            </tr>
-            </tbody>
-        </table>
+    <input id="teamSearch" class="teams-search" type="search"
+           placeholder="Search teams…" autocomplete="off" />
+
+    <div class="teams-grid" id="teamsGrid">
+        <div class="team-card" th:each="t : ${teams}"
+             th:attr="data-name=${t.name}, data-code=${t.code}">
+            <div class="team-badge" th:text="${t.code}">KC</div>
+            <span class="team-name" th:text="${t.name}">Chiefs</span>
+        </div>
     </div>
+
+    <p id="noResults" class="muted" style="display:none; padding:12px 0;">No teams match your search.</p>
 </main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
+    </div>
+</footer>
+
+<script>
+    const input = document.getElementById('teamSearch');
+    const cards = document.querySelectorAll('.team-card');
+    const noResults = document.getElementById('noResults');
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        let visible = 0;
+        cards.forEach(card => {
+            const match = !q
+                || card.dataset.name.toLowerCase().includes(q)
+                || card.dataset.code.toLowerCase().includes(q);
+            card.style.display = match ? '' : 'none';
+            if (match) visible++;
+        });
+        noResults.style.display = visible === 0 ? '' : 'none';
+    });
+</script>
 </body>
 </html>
