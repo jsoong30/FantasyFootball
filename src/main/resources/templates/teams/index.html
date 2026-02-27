@@ -19,56 +19,48 @@
 </header>
 
 <main class="container" style="padding:24px 0;">
-    <div class="page-head">
-        <div>
-            <h1 style="margin:0 0 6px;">Teams</h1>
-            <p class="muted" style="margin:0;">Total: <span th:text="${teamCount}">0</span></p>
-        </div>
-        <div class="teams-toolbar">
-            <input id="teamSearch" class="input" type="search" placeholder="Search teams..." aria-label="Search teams" />
+    <h1 style="margin:0 0 6px;">Teams</h1>
+    <p class="muted" style="margin:0 0 16px;">
+        <span th:text="${teamCount}">0</span> teams
+    </p>
+
+    <input id="teamSearch" class="teams-search" type="search"
+           placeholder="Search teams…" autocomplete="off" />
+
+    <div class="teams-grid" id="teamsGrid">
+        <div class="team-card" th:each="t : ${teams}"
+             th:attr="data-name=${t.name}, data-code=${t.code}">
+            <div class="team-badge" th:text="${t.code}">KC</div>
+            <span class="team-name" th:text="${t.name}">Chiefs</span>
         </div>
     </div>
-    <section class="team-grid">
 
-        <a class="team-card" th:each="t : ${teams}" th:href="@{|/teams/${t.code}|}">
-            <div class="team-logo">
-                <img
-                        th:src="@{|/img/teams/${t.code}.png|}"
-                        th:alt="${t.code} + ' logo'"
-                        loading="lazy"
-                        onerror="this.style.display='none'; this.parentElement.classList.add('fallback')"
-                />
-                <span class="logo-fallback" th:text="${t.code}">KC</span>
-            </div>
-
-            <div class="team-meta">
-                <div class="team-top">
-                    <span class="team-name" th:text="${t.name}">Chiefs</span>
-                    <span class="pill" th:text="${t.code}">KC</span>
-                </div>
-                <div class="team-sub muted">
-                    <span>Team Code: <span th:text="${t.code}">KC</span></span>
-                </div>
-            </div>
-        </a>
-
-        <div th:if="${#lists.isEmpty(teams)}" class="card" style="grid-column:1/-1;">
-            <p class="muted" style="margin:0;">No teams yet.</p>
-        </div>
-    </section>
-
+    <p id="noResults" class="muted" style="display:none; padding:12px 0;">No teams match your search.</p>
 </main>
 
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
+    </div>
+</footer>
+
 <script>
-    // Optional: simple filter without any libraries
     const input = document.getElementById('teamSearch');
-    const cards = () => Array.from(document.querySelectorAll('.team-card'));
-    input?.addEventListener('input', () => {
+    const cards = document.querySelectorAll('.team-card');
+    const noResults = document.getElementById('noResults');
+
+    input.addEventListener('input', () => {
         const q = input.value.trim().toLowerCase();
-        cards().forEach(c => {
-            const text = c.innerText.toLowerCase();
-            c.style.display = text.includes(q) ? '' : 'none';
+        let visible = 0;
+        cards.forEach(card => {
+            const match = !q
+                || card.dataset.name.toLowerCase().includes(q)
+                || card.dataset.code.toLowerCase().includes(q);
+            card.style.display = match ? '' : 'none';
+            if (match) visible++;
         });
+        noResults.style.display = visible === 0 ? '' : 'none';
     });
 </script>
 </body>
