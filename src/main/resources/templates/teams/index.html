@@ -30,7 +30,13 @@
     <div class="teams-grid" id="teamsGrid">
         <div class="team-card" th:each="t : ${teams}"
              th:attr="data-name=${t.name}, data-code=${t.code}">
-            <div class="team-badge" th:text="${t.code}">KC</div>
+            <div class="team-logo-wrap">
+                <img class="team-logo"
+                     th:src="@{/css/img/teams/{code}.png(code=${t.code})}"
+                     th:alt="${t.name}"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                <div class="team-badge" style="display:none;" th:text="${t.code}">KC</div>
+            </div>
             <span class="team-name" th:text="${t.name}">Chiefs</span>
         </div>
     </div>
