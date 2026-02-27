@@ -19,28 +19,57 @@
 </header>
 
 <main class="container" style="padding:24px 0;">
-    <h1 style="margin:0 0 10px;">Teams</h1>
-    <p class="muted">Total: <span th:text="${teamCount}">0</span></p>
-
-    <div class="card">
-        <table style="width:100%; border-collapse:collapse;">
-            <thead>
-            <tr>
-                <th style="text-align:left; padding:8px 6px;">Code</th>
-                <th style="text-align:left; padding:8px 6px;">Name</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="t : ${teams}">
-                <td style="padding:8px 6px;" th:text="${t.code}">KC</td>
-                <td style="padding:8px 6px;" th:text="${t.name}">Chiefs</td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(teams)}">
-                <td colspan="3" class="muted" style="padding:12px 6px;">No teams yet.</td>
-            </tr>
-            </tbody>
-        </table>
+    <div class="page-head">
+        <div>
+            <h1 style="margin:0 0 6px;">Teams</h1>
+            <p class="muted" style="margin:0;">Total: <span th:text="${teamCount}">0</span></p>
+        </div>
+        <div class="teams-toolbar">
+            <input id="teamSearch" class="input" type="search" placeholder="Search teams..." aria-label="Search teams" />
+        </div>
     </div>
+    <section class="team-grid">
+
+        <a class="team-card" th:each="t : ${teams}" th:href="@{|/teams/${t.code}|}">
+            <div class="team-logo">
+                <img
+                        th:src="@{|/img/teams/${t.code}.png|}"
+                        th:alt="${t.code} + ' logo'"
+                        loading="lazy"
+                        onerror="this.style.display='none'; this.parentElement.classList.add('fallback')"
+                />
+                <span class="logo-fallback" th:text="${t.code}">KC</span>
+            </div>
+
+            <div class="team-meta">
+                <div class="team-top">
+                    <span class="team-name" th:text="${t.name}">Chiefs</span>
+                    <span class="pill" th:text="${t.code}">KC</span>
+                </div>
+                <div class="team-sub muted">
+                    <span>Team Code: <span th:text="${t.code}">KC</span></span>
+                </div>
+            </div>
+        </a>
+
+        <div th:if="${#lists.isEmpty(teams)}" class="card" style="grid-column:1/-1;">
+            <p class="muted" style="margin:0;">No teams yet.</p>
+        </div>
+    </section>
+
 </main>
+
+<script>
+    // Optional: simple filter without any libraries
+    const input = document.getElementById('teamSearch');
+    const cards = () => Array.from(document.querySelectorAll('.team-card'));
+    input?.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        cards().forEach(c => {
+            const text = c.innerText.toLowerCase();
+            c.style.display = text.includes(q) ? '' : 'none';
+        });
+    });
+</script>
 </body>
 </html>
