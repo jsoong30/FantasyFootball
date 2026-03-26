@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/jacks/OneDrive/Documents/GitHub/FantasyFootball/FantasyFootball/src -type f \\\\\\(-name *.java -o -name *.html -o -name *.sql -o -name *.csv \\\\\\))",
+      "Bash(wc -l /c/Users/jacks/OneDrive/Documents/GitHub/FantasyFootball/FantasyFootball/src/main/resources/data/*.csv)"
+    ]
+  }
+}

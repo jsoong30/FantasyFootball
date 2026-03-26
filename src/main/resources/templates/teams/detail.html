@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Players</title>
+    <title th:text="${team.name} + ' — FantasyFootball'">Team</title>
     <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
 <body>
@@ -17,8 +17,8 @@
             </div>
         </div>
         <nav class="nav">
-            <a th:href="@{/players}" aria-current="page">Players</a>
-            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/players}">Players</a>
+            <a th:href="@{/teams}" aria-current="page">Teams</a>
             <a th:href="@{/stats}">Stats</a>
             <a th:href="@{/predictions}">Predictions</a>
             <a th:href="@{/players}" class="btn primary" style="margin-left:20px;padding:7px 16px;font-size:13px;">Get Started</a>
@@ -27,8 +27,21 @@
 </header>
 
 <main class="container" style="padding:24px 0;">
-    <h1 style="margin:0 0 10px;">Players</h1>
-    <p class="muted">Total: <span th:text="${playerCount}">0</span></p>
+    <a th:href="@{/teams}" class="muted" style="display:inline-flex; align-items:center; gap:6px; margin-bottom:16px; text-decoration:none;">
+        ← All Teams
+    </a>
+
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:24px;">
+        <img th:src="@{/css/img/teams/{code}.png(code=${team.code})}"
+             th:alt="${team.name}"
+             style="width:72px; height:72px; object-fit:contain;"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+        <div class="team-badge" style="display:none; width:72px; height:72px; font-size:1.4rem;" th:text="${team.code}">KC</div>
+        <div>
+            <h1 style="margin:0 0 4px;" th:text="${team.name}">Team Name</h1>
+            <span class="muted" th:text="${team.code}">CODE</span>
+        </div>
+    </div>
 
     <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
         <button class="pos-btn btn primary" data-pos="ALL" onclick="filterPos(this)">All</button>
@@ -47,7 +60,6 @@
                 <th style="text-align:left; padding:8px 6px;">Rank</th>
                 <th style="text-align:left; padding:8px 6px;">Name</th>
                 <th class="col-pos" style="text-align:left; padding:8px 6px;">Pos</th>
-                <th style="text-align:left; padding:8px 6px;">Team</th>
                 <th style="text-align:right; padding:8px 6px;">Pts</th>
                 <th class="col-passing" style="text-align:right; padding:8px 6px; display:none;">Pass Yds</th>
                 <th class="col-passing" style="text-align:right; padding:8px 6px; display:none;">Pass TD</th>
@@ -68,12 +80,11 @@
                 th:attr="data-position=${p.position}"
                 style="border-bottom:1px solid var(--border);">
                 <td style="padding:8px 6px; color:var(--muted);"
-                    th:text="${s != null and s.rank != null ? s.rank : '—'}">1</td>
+                    th:text="${s != null and s.rank != null ? s.rank : '—'}">—</td>
                 <td style="padding:8px 6px; font-weight:600;" th:text="${p.fullName}">Player Name</td>
                 <td class="col-pos" style="padding:8px 6px;">
                     <span th:text="${p.position}" style="font-weight:700; color:var(--brand);">QB</span>
                 </td>
-                <td style="padding:8px 6px;" th:text="${p.team != null ? p.team.code : '—'}">KC</td>
                 <td style="padding:8px 6px; text-align:right; font-weight:600;"
                     th:text="${s != null and s.totalPoints != null ? #numbers.formatDecimal(s.totalPoints,1,2) : '—'}">—</td>
                 <td class="col-passing" style="padding:8px 6px; text-align:right; display:none;"
@@ -102,7 +113,7 @@
                     th:text="${s != null and s.patMade != null ? s.totalFgMade() : '—'}">—</td>
             </tr>
             <tr th:if="${#lists.isEmpty(players)}">
-                <td colspan="5" class="muted" style="padding:12px 6px;">No players found.</td>
+                <td colspan="4" class="muted" style="padding:12px 6px;">No players found for this team.</td>
             </tr>
             </tbody>
         </table>

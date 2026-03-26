@@ -16,20 +16,20 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Controller
-@RequestMapping("/players")
-public class PlayersController {
+@RequestMapping("/predictions")
+public class PredictionsController {
 
     private final PlayerRepository playerRepository;
     private final PlayerStatRepository playerStatRepository;
 
-    public PlayersController(PlayerRepository playerRepository,
-                             PlayerStatRepository playerStatRepository) {
+    public PredictionsController(PlayerRepository playerRepository,
+                                 PlayerStatRepository playerStatRepository) {
         this.playerRepository = playerRepository;
         this.playerStatRepository = playerStatRepository;
     }
 
     @GetMapping
-    public String list(Model model) {
+    public String index(Model model) {
         List<Player> players = new ArrayList<>(playerRepository.findAllByOrderByFullNameAsc());
 
         List<Long> ids = players.stream().map(Player::getId).collect(Collectors.toList());
@@ -42,9 +42,10 @@ public class PlayersController {
             return (s != null && s.getTotalPoints() != null) ? s.getTotalPoints() : -1.0;
         }).reversed());
 
+        // modelConnected drives the banner — flip to true once the Python API is live
         model.addAttribute("players", players);
         model.addAttribute("statsMap", statsMap);
-        model.addAttribute("playerCount", playerRepository.count());
-        return "players/index";
+        model.addAttribute("modelConnected", false);
+        return "predictions/index";
     }
 }
