@@ -19,7 +19,7 @@
         <nav class="nav">
             <a th:href="@{/players}" aria-current="page">Players</a>
             <a th:href="@{/teams}">Teams</a>
-            <a th:href="@{/stats}">Stats</a>
+            <a th:href="@{/rankings}">Rankings</a>
             <a th:href="@{/predictions}">Predictions</a>
             <a th:href="@{/players}" class="btn primary" style="margin-left:20px;padding:7px 16px;font-size:13px;">Get Started</a>
         </nav>
@@ -27,8 +27,27 @@
 </header>
 
 <main class="container" style="padding:24px 0;">
-    <h1 style="margin:0 0 10px;">Players</h1>
-    <p class="muted">Total: <span th:text="${playerCount}">0</span></p>
+    <h1 style="margin:0 0 6px;">Players</h1>
+    <p class="muted" style="margin:0 0 16px;">Total: <span th:text="${playerCount}">0</span></p>
+
+    <!-- Season selector -->
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:center;">
+        <span style="font-size:13px; color:var(--muted); margin-right:4px;">Season:</span>
+        <a th:each="y : ${availableYears}"
+           th:href="@{/players(year=${y})}"
+           th:classappend="${selectedYear == y} ? ' primary' : ''"
+           th:text="${y}"
+           class="btn"
+           style="padding:5px 14px; font-size:13px;">2024</a>
+    </div>
+
+    <!-- Search -->
+    <div style="margin-bottom:16px;">
+        <input id="searchInput" type="text" placeholder="Search player name..."
+               oninput="filterSearch(this.value)"
+               style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                      background:var(--panel); color:var(--text); font-size:14px; width:260px;">
+    </div>
 
     <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
         <button class="pos-btn btn primary" data-pos="ALL" onclick="filterPos(this)">All</button>
@@ -65,11 +84,17 @@
             </thead>
             <tbody id="playerRows">
             <tr th:each="p : ${players}" th:with="s=${statsMap[p.id]}"
-                th:attr="data-position=${p.position}"
-                style="border-bottom:1px solid var(--border);">
+                th:attr="data-position=${p.position},data-name=${p.fullName}"
+                onmouseover="this.style.background='rgba(96,165,250,.05)'"
+                onmouseout="this.style.background=''"
+                style="border-bottom:1px solid var(--border); cursor:pointer;">
                 <td style="padding:8px 6px; color:var(--muted);"
                     th:text="${s != null and s.rank != null ? s.rank : '—'}">1</td>
-                <td style="padding:8px 6px; font-weight:600;" th:text="${p.fullName}">Player Name</td>
+                <td style="padding:8px 6px; font-weight:600;">
+                    <a th:href="@{/players/{id}(id=${p.id})}"
+                       style="color:var(--text); text-decoration:none;"
+                       th:text="${p.fullName}">Player Name</a>
+                </td>
                 <td class="col-pos" style="padding:8px 6px;">
                     <span th:text="${p.position}" style="font-weight:700; color:var(--brand);">QB</span>
                 </td>
@@ -121,19 +146,33 @@
     function setCols(group, visible) {
         document.querySelectorAll('.' + group).forEach(el => el.style.display = visible ? '' : 'none');
     }
+    let activePos = 'ALL';
+    let searchQuery = '';
+
+    function applyFilters() {
+        document.querySelectorAll('#playerRows tr[data-position]').forEach(row => {
+            const posMatch = activePos === 'ALL' || row.dataset.position === activePos;
+            const nameMatch = row.dataset.name ? row.dataset.name.toLowerCase().includes(searchQuery) : true;
+            row.style.display = (posMatch && nameMatch) ? '' : 'none';
+        });
+    }
+
     function filterPos(btn) {
         document.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('primary'));
         btn.classList.add('primary');
-        const pos = btn.dataset.pos;
-        document.querySelectorAll('#playerRows tr[data-position]').forEach(row => {
-            row.style.display = (pos === 'ALL' || row.dataset.position === pos) ? '' : 'none';
-        });
-        const cols = colGroups[pos] || colGroups['ALL'];
+        activePos = btn.dataset.pos;
+        const cols = colGroups[activePos] || colGroups['ALL'];
         setCols('col-pos',       cols.pos);
         setCols('col-passing',   cols.passing);
         setCols('col-rushing',   cols.rushing);
         setCols('col-receiving', cols.receiving);
         setCols('col-kicking',   cols.kicking);
+        applyFilters();
+    }
+
+    function filterSearch(query) {
+        searchQuery = query.toLowerCase();
+        applyFilters();
     }
 </script>
 </main>

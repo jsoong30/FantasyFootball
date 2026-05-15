@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rankings — FantasyFootball</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <span style="font-size:22px;">🏈</span>
+            <div>
+                <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
+                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;">2024 NFL · AI Predictions Coming</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a th:href="@{/players}">Players</a>
+            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/rankings}" aria-current="page">Rankings</a>
+            <a th:href="@{/predictions}">Predictions</a>
+            <a th:href="@{/players}" class="btn primary" style="margin-left:20px;padding:7px 16px;font-size:13px;">Get Started</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0;">
+    <h1 style="margin:0 0 4px;">Fantasy Rankings</h1>
+    <p style="color:var(--muted); margin:0 0 16px;">Full season results sorted by total fantasy points.</p>
+
+    <!-- Season selector -->
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:center;">
+        <span style="font-size:13px; color:var(--muted); margin-right:4px;">Season:</span>
+        <a th:each="y : ${availableYears}"
+           th:href="@{/rankings(year=${y}, position=${selectedPosition})}"
+           th:classappend="${selectedYear == y} ? ' primary' : ''"
+           th:text="${y}"
+           class="btn"
+           style="padding:5px 14px; font-size:13px;">2024</a>
+    </div>
+
+    <!-- Position Filter -->
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+        <a th:href="@{/rankings(year=${selectedYear}, position='ALL')}"
+           th:classappend="${selectedPosition == 'ALL'} ? ' primary' : ''"
+           class="btn">All</a>
+        <a th:href="@{/rankings(year=${selectedYear}, position='QB')}"
+           th:classappend="${selectedPosition == 'QB'} ? ' primary' : ''"
+           class="btn">QB</a>
+        <a th:href="@{/rankings(year=${selectedYear}, position='RB')}"
+           th:classappend="${selectedPosition == 'RB'} ? ' primary' : ''"
+           class="btn">RB</a>
+        <a th:href="@{/rankings(year=${selectedYear}, position='WR')}"
+           th:classappend="${selectedPosition == 'WR'} ? ' primary' : ''"
+           class="btn">WR</a>
+        <a th:href="@{/rankings(year=${selectedYear}, position='TE')}"
+           th:classappend="${selectedPosition == 'TE'} ? ' primary' : ''"
+           class="btn">TE</a>
+        <a th:href="@{/rankings(year=${selectedYear}, position='K')}"
+           th:classappend="${selectedPosition == 'K'} ? ' primary' : ''"
+           class="btn">K</a>
+    </div>
+
+    <!-- Search -->
+    <div style="margin-bottom:16px;">
+        <input id="searchInput" type="text" placeholder="Search player name..."
+               oninput="filterTable(this.value)"
+               style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                      background:var(--panel); color:var(--text); font-size:14px; width:260px;">
+    </div>
+
+    <!-- Rankings Table -->
+    <div class="card" style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; min-width:500px;">
+            <thead>
+            <tr style="border-bottom:1px solid var(--border);">
+                <th style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Rank</th>
+                <th style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Player</th>
+                <th style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Pos</th>
+                <th style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Team</th>
+                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Fantasy Pts</th>
+                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Pass Yds</th>
+                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rush Yds</th>
+                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rec Yds</th>
+                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">TDs</th>
+            </tr>
+            </thead>
+            <tbody id="rankingsBody">
+            <tr th:each="s, iter : ${stats}"
+                th:attr="data-name=${s.player.fullName}"
+                style="border-bottom:1px solid var(--border); transition:background .15s;"
+                onmouseover="this.style.background='var(--border)'"
+                onmouseout="this.style.background=''">
+                <td style="padding:10px 8px; color:var(--muted); font-weight:600;"
+                    th:text="${iter.index + 1}">1</td>
+                <td style="padding:10px 8px; font-weight:600;">
+                    <a th:href="@{/players/{id}(id=${s.player.id})}"
+                       style="color:var(--text); text-decoration:none;"
+                       th:text="${s.player.fullName}">Player Name</a>
+                </td>
+                <td style="padding:10px 8px;">
+                    <span th:text="${s.player.position}"
+                          style="background:var(--brand); color:#fff; padding:2px 8px;
+                                 border-radius:20px; font-size:12px; font-weight:700;">QB</span>
+                </td>
+                <td style="padding:10px 8px; color:var(--muted);"
+                    th:text="${s.player.team != null ? s.player.team.code : '—'}">KC</td>
+                <td style="padding:10px 8px; text-align:right; font-weight:700; color:var(--brand);"
+                    th:text="${s.totalPoints != null ? #numbers.formatDecimal(s.totalPoints,1,1) : '—'}">0</td>
+                <td style="padding:10px 8px; text-align:right; color:var(--muted);"
+                    th:text="${s.passingYds != null and s.passingYds > 0 ? s.passingYds : '—'}">—</td>
+                <td style="padding:10px 8px; text-align:right; color:var(--muted);"
+                    th:text="${s.rushingYds != null and s.rushingYds > 0 ? s.rushingYds : '—'}">—</td>
+                <td style="padding:10px 8px; text-align:right; color:var(--muted);"
+                    th:text="${s.receivingYds != null and s.receivingYds > 0 ? s.receivingYds : '—'}">—</td>
+                <td style="padding:10px 8px; text-align:right; color:var(--muted);"
+                    th:text="${(s.passingTd ?: 0) + (s.rushingTd ?: 0) + (s.receivingTd ?: 0)}">0</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(stats)}">
+                <td colspan="9" style="padding:20px; text-align:center; color:var(--muted);">No rankings found.</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
+    </div>
+</footer>
+
+<script>
+    function filterTable(query) {
+        const q = query.toLowerCase();
+        document.querySelectorAll('#rankingsBody tr[data-name]').forEach(row => {
+            row.style.display = row.dataset.name.toLowerCase().includes(q) ? '' : 'none';
+        });
+    }
+</script>
+</body>
+</html>

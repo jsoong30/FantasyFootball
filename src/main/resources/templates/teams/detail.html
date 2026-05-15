@@ -13,7 +13,7 @@
             <span style="font-size:22px;">🏈</span>
             <div>
                 <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
-                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;">2024 NFL · AI Predictions Coming</div>
+                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;" th:text="${selectedYear} + ' NFL · AI Predictions Coming'">2024 NFL · AI Predictions Coming</div>
             </div>
         </div>
         <nav class="nav">
@@ -41,6 +41,17 @@
             <h1 style="margin:0 0 4px;" th:text="${team.name}">Team Name</h1>
             <span class="muted" th:text="${team.code}">CODE</span>
         </div>
+    </div>
+
+    <!-- Season selector -->
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:center;">
+        <span style="font-size:13px; color:var(--muted); margin-right:4px;">Season:</span>
+        <a th:each="y : ${availableYears}"
+           th:href="@{/teams/{code}(code=${team.code}, year=${y})}"
+           th:classappend="${selectedYear == y} ? ' primary' : ''"
+           th:text="${y}"
+           class="btn"
+           style="padding:5px 14px; font-size:13px;">2024</a>
     </div>
 
     <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">

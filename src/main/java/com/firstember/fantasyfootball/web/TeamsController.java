@@ -10,6 +10,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -41,13 +42,20 @@ public class TeamsController {
     }
 
     @GetMapping("/{code}")
-    public String detail(@PathVariable String code, Model model) {
+    public String detail(@PathVariable String code,
+                         @RequestParam(required = false) Integer year,
+                         Model model) {
+
         var team = teamRepository.findAll().stream()
                 .filter(t -> t.getCode().equalsIgnoreCase(code))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown team: " + code));
 
-        List<Player> players = new ArrayList<>(playerRepository.findByTeam_CodeOrderByFullNameAsc(code.toUpperCase()));
+        List<Integer> availableYears = playerRepository.findDistinctSeasons();
+        int selectedYear = resolveYear(year, availableYears);
+
+        List<Player> players = new ArrayList<>(
+                playerRepository.findByTeam_CodeAndSeason(code.toUpperCase(), selectedYear));
 
         List<Long> ids = players.stream().map(Player::getId).collect(Collectors.toList());
         Map<Long, PlayerStat> statsMap = playerStatRepository.findByPlayer_IdIn(ids).stream()
@@ -61,6 +69,13 @@ public class TeamsController {
         model.addAttribute("team", team);
         model.addAttribute("players", players);
         model.addAttribute("statsMap", statsMap);
+        model.addAttribute("availableYears", availableYears);
+        model.addAttribute("selectedYear", selectedYear);
         return "teams/detail";
+    }
+
+    private static int resolveYear(Integer requested, List<Integer> available) {
+        if (requested != null) return requested;
+        return available.isEmpty() ? 2024 : available.get(0);
     }
 }

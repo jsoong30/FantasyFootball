@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title th:text="${player.fullName} + ' — FantasyFootball'">Player Detail</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <span style="font-size:22px;">🏈</span>
+            <div>
+                <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
+                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;">2024 NFL · AI Predictions Coming</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a th:href="@{/players}" aria-current="page">Players</a>
+            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/rankings}">Rankings</a>
+            <a th:href="@{/predictions}">Predictions</a>
+            <a th:href="@{/players}" class="btn primary" style="margin-left:20px;padding:7px 16px;font-size:13px;">Get Started</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0;">
+
+    <!-- Breadcrumb -->
+    <div style="margin-bottom:20px; color:var(--muted); font-size:14px;">
+        <a th:href="@{/players}" style="color:var(--muted); text-decoration:none;">← Back to Players</a>
+    </div>
+
+    <!-- Player Header -->
+    <div class="card" style="padding:28px; margin-bottom:20px;">
+        <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
+            <div style="width:72px; height:72px; border-radius:50%; background:var(--border);
+                        display:flex; align-items:center; justify-content:center; font-size:28px;">
+                🏈
+            </div>
+            <div style="flex:1;">
+                <h1 style="margin:0 0 6px; font-size:clamp(22px,4vw,32px);" th:text="${player.fullName}">Player Name</h1>
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                    <span class="pos-badge" th:text="${player.position}"
+                          style="background:var(--brand); color:#fff; padding:3px 10px; border-radius:20px; font-size:13px; font-weight:700;">QB</span>
+                    <span style="color:var(--muted);" th:text="${player.team != null ? player.team.code : '—'}">KC</span>
+                    <span style="color:var(--muted);" th:if="${player.age != null}" th:text="'Age ' + ${player.age}">Age 28</span>
+                    <span style="color:var(--muted);" th:if="${player.status != null}" th:text="${player.status}">Active</span>
+                    <span style="color:var(--muted);" th:if="${player.byeWeek != null}" th:text="'Bye: Wk ' + ${player.byeWeek}">Bye: Wk 7</span>
+                </div>
+            </div>
+            <!-- Key Numbers -->
+            <div style="display:flex; gap:24px; text-align:center;" th:if="${stat != null}">
+                <div>
+                    <div style="font-size:28px; font-weight:800; color:var(--brand);"
+                         th:text="${stat.totalPoints != null ? #numbers.formatDecimal(stat.totalPoints,1,1) : '—'}">0</div>
+                    <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">Fantasy Pts</div>
+                </div>
+                <div>
+                    <div style="font-size:28px; font-weight:800; color:var(--brand);"
+                         th:text="${player.position + positionRank}">QB1</div>
+                    <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">Position Rank</div>
+                </div>
+                <div th:if="${stat.rank != null}">
+                    <div style="font-size:28px; font-weight:800; color:var(--brand);" th:text="${stat.rank}">1</div>
+                    <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">Overall Rank</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- No Stats Message -->
+    <div class="card" th:if="${stat == null}" style="padding:24px; text-align:center; color:var(--muted);">
+        No 2024 season stats available for this player.
+    </div>
+
+    <!-- Stats Breakdown -->
+    <div th:if="${stat != null}">
+
+        <!-- Passing Stats (QB) -->
+        <div th:if="${player.position == 'QB'}" class="card" style="padding:24px; margin-bottom:16px;">
+            <h2 style="margin:0 0 16px; font-size:16px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);">Passing</h2>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:16px;">
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.passingYds != null ? stat.passingYds : '—'}">0</div>
+                    <div class="stat-lbl">Pass Yards</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.passingTd != null ? stat.passingTd : '—'}">0</div>
+                    <div class="stat-lbl">Pass TDs</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.passingInt != null ? stat.passingInt : '—'}">0</div>
+                    <div class="stat-lbl">Interceptions</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.rushingYds != null ? stat.rushingYds : '—'}">0</div>
+                    <div class="stat-lbl">Rush Yards</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.rushingTd != null ? stat.rushingTd : '—'}">0</div>
+                    <div class="stat-lbl">Rush TDs</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.fumbles != null ? stat.fumbles : '—'}">0</div>
+                    <div class="stat-lbl">Fumbles</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rushing Stats (RB) -->
+        <div th:if="${player.position == 'RB'}" class="card" style="padding:24px; margin-bottom:16px;">
+            <h2 style="margin:0 0 16px; font-size:16px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);">Rushing & Receiving</h2>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:16px;">
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.rushingYds != null ? stat.rushingYds : '—'}">0</div>
+                    <div class="stat-lbl">Rush Yards</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.rushingTd != null ? stat.rushingTd : '—'}">0</div>
+                    <div class="stat-lbl">Rush TDs</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.targets != null ? stat.targets : '—'}">0</div>
+                    <div class="stat-lbl">Targets</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.receivingRec != null ? stat.receivingRec : '—'}">0</div>
+                    <div class="stat-lbl">Receptions</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.receivingYds != null ? stat.receivingYds : '—'}">0</div>
+                    <div class="stat-lbl">Rec Yards</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.receivingTd != null ? stat.receivingTd : '—'}">0</div>
+                    <div class="stat-lbl">Rec TDs</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.receptionPct != null ? #numbers.formatDecimal(stat.receptionPct,1,1) + '%' : '—'}">0</div>
+                    <div class="stat-lbl">Catch %</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.fumbles != null ? stat.fumbles : '—'}">0</div>
+                    <div class="stat-lbl">Fumbles</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Receiving Stats (WR / TE) -->
+        <div th:if="${player.position == 'WR' or player.position == 'TE'}" class="card" style="padding:24px; margin-bottom:16px;">
+            <h2 style="margin:0 0 16px; font-size:16px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);">Receiving</h2>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:16px;">
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.targets != null ? stat.targets : '—'}">0</div>
+                    <div class="stat-lbl">Targets</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.receivingRec != null ? stat.receivingRec : '—'}">0</div>
+                    <div class="stat-lbl">Receptions</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.receivingYds != null ? stat.receivingYds : '—'}">0</div>
+                    <div class="stat-lbl">Rec Yards</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.receivingTd != null ? stat.receivingTd : '—'}">0</div>
+                    <div class="stat-lbl">Rec TDs</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.receptionPct != null ? #numbers.formatDecimal(stat.receptionPct,1,1) + '%' : '—'}">0</div>
+                    <div class="stat-lbl">Catch %</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.rushingYds != null ? stat.rushingYds : '—'}">0</div>
+                    <div class="stat-lbl">Rush Yards</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.fumbles != null ? stat.fumbles : '—'}">0</div>
+                    <div class="stat-lbl">Fumbles</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kicker Stats -->
+        <div th:if="${player.position == 'K'}" class="card" style="padding:24px; margin-bottom:16px;">
+            <h2 style="margin:0 0 16px; font-size:16px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);">Kicking</h2>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:16px;">
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.totalFgMade()}">0</div>
+                    <div class="stat-lbl">FG Made</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.patMade != null ? stat.patMade : '—'}">0</div>
+                    <div class="stat-lbl">PAT Made</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.patMissed != null ? stat.patMissed : '—'}">0</div>
+                    <div class="stat-lbl">PAT Missed</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.fgMade50 != null ? stat.fgMade50 : '—'}">0</div>
+                    <div class="stat-lbl">FG 50+ Made</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.fgMade40_49 != null ? stat.fgMade40_49 : '—'}">0</div>
+                    <div class="stat-lbl">FG 40-49</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.fgMade30_39 != null ? stat.fgMade30_39 : '—'}">0</div>
+                    <div class="stat-lbl">FG 30-39</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.fgMade20_29 != null ? stat.fgMade20_29 : '—'}">0</div>
+                    <div class="stat-lbl">FG 20-29</div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- end stats -->
+
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
+    </div>
+</footer>
+</body>
+</html>
