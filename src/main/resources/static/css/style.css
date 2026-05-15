@@ -8,12 +8,6 @@
     --btn: #1d4ed8;
     --btn-text: #fff;
 }
-@media (prefers-color-scheme: light){
-    :root{
-        --bg: #f8fafc; --panel:#ffffff; --text:#0f172a; --muted:#64748b;
-        --brand:#2563eb; --border:#e5e7eb; --btn:#2563eb; --btn-text:#fff;
-    }
-}
 /* ── Keyframes ──────────────────────────────────────────────── */
 @keyframes fadeUp{
     from{opacity:0; transform:translateY(28px);}

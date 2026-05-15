@@ -34,3 +34,6 @@ build/
 
 ### Environment variables ###
 .env
+
+### Local Spring profile (machine-specific DB config) ###
+src/main/resources/application-local.yml
