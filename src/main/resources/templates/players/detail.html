@@ -74,7 +74,7 @@
 
     <!-- No Stats Message -->
     <div class="card" th:if="${stat == null}" style="padding:24px; text-align:center; color:var(--muted);">
-        No 2024 season stats available for this player.
+        No <span th:text="${player.season}">—</span> season stats available for this player.
     </div>
 
     <!-- Stats Breakdown -->
@@ -220,9 +220,166 @@
             </div>
         </div>
 
+        <!-- Defense / Special Teams Stats -->
+        <div th:if="${player.position == 'DST'}" class="card" style="padding:24px; margin-bottom:16px;">
+            <h2 style="margin:0 0 16px; font-size:16px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);">Defense &amp; Special Teams</h2>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:16px;">
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.defSacks != null ? stat.defSacks : '—'}">0</div>
+                    <div class="stat-lbl">Sacks</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.defInts != null ? stat.defInts : '—'}">0</div>
+                    <div class="stat-lbl">Interceptions</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.defFumRecoveries != null ? stat.defFumRecoveries : '—'}">0</div>
+                    <div class="stat-lbl">Fum Recoveries</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.defTd != null ? stat.defTd : '—'}">0</div>
+                    <div class="stat-lbl">Def TDs</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.defSafeties != null ? stat.defSafeties : '—'}">0</div>
+                    <div class="stat-lbl">Safeties</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.defBlockedKicks != null ? stat.defBlockedKicks : '—'}">0</div>
+                    <div class="stat-lbl">Blocked Kicks</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.ptsAllowed != null ? stat.ptsAllowed : '—'}">0</div>
+                    <div class="stat-lbl">Pts Allowed</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-val" th:text="${stat.ydsAllowed != null ? stat.ydsAllowed : '—'}">0</div>
+                    <div class="stat-lbl">Yds Allowed</div>
+                </div>
+            </div>
+        </div>
+
     </div><!-- end stats -->
 
+    <!-- Weekly Performance -->
+    <div th:if="${weeklyStats != null and !weeklyStats.isEmpty()}" class="card" style="padding:24px; margin-bottom:16px;">
+        <h2 style="margin:0 0 20px; font-size:16px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);">Week-by-Week Performance</h2>
+
+        <!-- Chart -->
+        <div style="position:relative; height:200px; margin-bottom:24px;">
+            <canvas id="weekChart"></canvas>
+        </div>
+
+        <!-- Table -->
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead>
+                <tr style="border-bottom:1px solid var(--border); color:var(--muted);">
+                    <th style="padding:6px 8px; text-align:left;">Wk</th>
+                    <th style="padding:6px 8px; text-align:right; color:var(--brand);">Pts</th>
+                    <!-- QB -->
+                    <th th:if="${player.position == 'QB'}" style="padding:6px 8px; text-align:right;">Pass Yds</th>
+                    <th th:if="${player.position == 'QB'}" style="padding:6px 8px; text-align:right;">Pass TD</th>
+                    <th th:if="${player.position == 'QB'}" style="padding:6px 8px; text-align:right;">INT</th>
+                    <th th:if="${player.position == 'QB'}" style="padding:6px 8px; text-align:right;">Rush Yds</th>
+                    <!-- RB -->
+                    <th th:if="${player.position == 'RB'}" style="padding:6px 8px; text-align:right;">Rush Yds</th>
+                    <th th:if="${player.position == 'RB'}" style="padding:6px 8px; text-align:right;">Rush TD</th>
+                    <th th:if="${player.position == 'RB'}" style="padding:6px 8px; text-align:right;">Rec</th>
+                    <th th:if="${player.position == 'RB'}" style="padding:6px 8px; text-align:right;">Rec Yds</th>
+                    <!-- WR / TE -->
+                    <th th:if="${player.position == 'WR' or player.position == 'TE'}" style="padding:6px 8px; text-align:right;">Tgts</th>
+                    <th th:if="${player.position == 'WR' or player.position == 'TE'}" style="padding:6px 8px; text-align:right;">Rec</th>
+                    <th th:if="${player.position == 'WR' or player.position == 'TE'}" style="padding:6px 8px; text-align:right;">Rec Yds</th>
+                    <th th:if="${player.position == 'WR' or player.position == 'TE'}" style="padding:6px 8px; text-align:right;">Rec TD</th>
+                    <!-- K -->
+                    <th th:if="${player.position == 'K'}" style="padding:6px 8px; text-align:right;">FG</th>
+                    <th th:if="${player.position == 'K'}" style="padding:6px 8px; text-align:right;">PAT</th>
+                    <!-- DST -->
+                    <th th:if="${player.position == 'DST'}" style="padding:6px 8px; text-align:right;">Sacks</th>
+                    <th th:if="${player.position == 'DST'}" style="padding:6px 8px; text-align:right;">INT</th>
+                    <th th:if="${player.position == 'DST'}" style="padding:6px 8px; text-align:right;">TD</th>
+                    <th th:if="${player.position == 'DST'}" style="padding:6px 8px; text-align:right;">Pts Allow</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="w : ${weeklyStats}"
+                    style="border-bottom:1px solid var(--border); transition:background .15s;"
+                    onmouseover="this.style.background='rgba(96,165,250,.05)'"
+                    onmouseout="this.style.background=''">
+                    <td style="padding:6px 8px; color:var(--muted);" th:text="'Wk ' + ${w.week}">Wk 1</td>
+                    <td style="padding:6px 8px; text-align:right; font-weight:700; color:var(--brand);"
+                        th:text="${w.totalPoints != null ? #numbers.formatDecimal(w.totalPoints,1,1) : '—'}">0</td>
+                    <!-- QB -->
+                    <td th:if="${player.position == 'QB'}" style="padding:6px 8px; text-align:right;" th:text="${w.passingYds ?: '—'}">—</td>
+                    <td th:if="${player.position == 'QB'}" style="padding:6px 8px; text-align:right;" th:text="${w.passingTd ?: '—'}">—</td>
+                    <td th:if="${player.position == 'QB'}" style="padding:6px 8px; text-align:right;" th:text="${w.passingInt ?: '—'}">—</td>
+                    <td th:if="${player.position == 'QB'}" style="padding:6px 8px; text-align:right;" th:text="${w.rushingYds ?: '—'}">—</td>
+                    <!-- RB -->
+                    <td th:if="${player.position == 'RB'}" style="padding:6px 8px; text-align:right;" th:text="${w.rushingYds ?: '—'}">—</td>
+                    <td th:if="${player.position == 'RB'}" style="padding:6px 8px; text-align:right;" th:text="${w.rushingTd ?: '—'}">—</td>
+                    <td th:if="${player.position == 'RB'}" style="padding:6px 8px; text-align:right;" th:text="${w.receivingRec ?: '—'}">—</td>
+                    <td th:if="${player.position == 'RB'}" style="padding:6px 8px; text-align:right;" th:text="${w.receivingYds ?: '—'}">—</td>
+                    <!-- WR / TE -->
+                    <td th:if="${player.position == 'WR' or player.position == 'TE'}" style="padding:6px 8px; text-align:right;" th:text="${w.targets ?: '—'}">—</td>
+                    <td th:if="${player.position == 'WR' or player.position == 'TE'}" style="padding:6px 8px; text-align:right;" th:text="${w.receivingRec ?: '—'}">—</td>
+                    <td th:if="${player.position == 'WR' or player.position == 'TE'}" style="padding:6px 8px; text-align:right;" th:text="${w.receivingYds ?: '—'}">—</td>
+                    <td th:if="${player.position == 'WR' or player.position == 'TE'}" style="padding:6px 8px; text-align:right;" th:text="${w.receivingTd ?: '—'}">—</td>
+                    <!-- K -->
+                    <td th:if="${player.position == 'K'}" style="padding:6px 8px; text-align:right;" th:text="${w.fgMade ?: '—'}">—</td>
+                    <td th:if="${player.position == 'K'}" style="padding:6px 8px; text-align:right;" th:text="${w.patMade ?: '—'}">—</td>
+                    <!-- DST -->
+                    <td th:if="${player.position == 'DST'}" style="padding:6px 8px; text-align:right;" th:text="${w.defSacks ?: '—'}">—</td>
+                    <td th:if="${player.position == 'DST'}" style="padding:6px 8px; text-align:right;" th:text="${w.defInts ?: '—'}">—</td>
+                    <td th:if="${player.position == 'DST'}" style="padding:6px 8px; text-align:right;" th:text="${w.defTd ?: '—'}">—</td>
+                    <td th:if="${player.position == 'DST'}" style="padding:6px 8px; text-align:right;" th:text="${w.ptsAllowed ?: '—'}">—</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script th:if="${weeklyStats != null and !weeklyStats.isEmpty()}" th:inline="javascript">
+    const weeks  = /*[[${weeklyStats.![week]}]]*/  [];
+    const points = /*[[${weeklyStats.![totalPoints ?: 0]}]]*/ [];
+
+    const ctx = document.getElementById('weekChart');
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: weeks.map(w => 'Wk ' + w),
+                datasets: [{
+                    label: 'Fantasy Pts',
+                    data: points,
+                    backgroundColor: 'rgba(96,165,250,0.5)',
+                    borderColor:     'rgba(96,165,250,1)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => 'Pts: ' + Number(ctx.parsed.y).toFixed(1)
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#9ca3af' } },
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#9ca3af' } }
+                }
+            }
+        });
+    }
+</script>
 
 <footer class="site-footer">
     <div class="container footer-inner">

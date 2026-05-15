@@ -39,6 +39,16 @@ public class SleeperStatsDTO {
     private int fgMiss20_29;
     private int fgMiss30_39;
 
+    // Defense / Special Teams
+    private int defSacks;
+    private int defInts;
+    private int defFumRecoveries;
+    private int defTd;
+    private int defSafeties;
+    private int defBlockedKicks;
+    private int ptsAllowed;
+    private int ydsAllowed;
+
     /** Add one week's raw Sleeper stat map into the running season total. */
     public void addWeek(Map<String, Object> week) {
         totalPoints  += asDouble(week, "pts_ppr");
@@ -66,12 +76,23 @@ public class SleeperStatsDTO {
         fgMade50     += asInt(week, "fgm_50p");
         fgMiss20_29  += asInt(week, "fgmiss_20_29");
         fgMiss30_39  += asInt(week, "fgmiss_30_39");
+
+        // DST — Sleeper key "int" is fine as a String map key despite being a Java reserved word
+        defSacks        += asInt(week, "sack");
+        defInts         += asInt(week, "int");
+        defFumRecoveries += asInt(week, "fum_rec");
+        defTd           += asInt(week, "def_td");
+        defSafeties     += asInt(week, "safe");
+        defBlockedKicks += asInt(week, "blk_kick");
+        ptsAllowed      += asInt(week, "pts_allow");
+        ydsAllowed      += asInt(week, "yds_allow");
     }
 
     public boolean hasStats() {
         return totalPoints > 0
-                || passingYds > 0 || rushingYds > 0
-                || receivingYds > 0 || patMade > 0 || fgMade0_19 + fgMade20_29 + fgMade30_39 + fgMade40_49 + fgMade50 > 0;
+                || passingYds > 0 || rushingYds > 0 || receivingYds > 0
+                || patMade > 0 || fgMade0_19 + fgMade20_29 + fgMade30_39 + fgMade40_49 + fgMade50 > 0
+                || defSacks > 0 || defInts > 0 || defFumRecoveries > 0 || defTd > 0;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -108,4 +129,13 @@ public class SleeperStatsDTO {
     public int getFgMade50()        { return fgMade50; }
     public int getFgMiss20_29()     { return fgMiss20_29; }
     public int getFgMiss30_39()     { return fgMiss30_39; }
+
+    public int getDefSacks()        { return defSacks; }
+    public int getDefInts()         { return defInts; }
+    public int getDefFumRecoveries(){ return defFumRecoveries; }
+    public int getDefTd()           { return defTd; }
+    public int getDefSafeties()     { return defSafeties; }
+    public int getDefBlockedKicks() { return defBlockedKicks; }
+    public int getPtsAllowed()      { return ptsAllowed; }
+    public int getYdsAllowed()      { return ydsAllowed; }
 }

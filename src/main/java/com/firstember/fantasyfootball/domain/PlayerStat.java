@@ -50,6 +50,16 @@ public class PlayerStat {
     @Column(name = "fg_miss_20_29") private Integer fgMiss20_29;
     @Column(name = "fg_miss_30_39") private Integer fgMiss30_39;
 
+    // Defense / Special Teams
+    @Column(name = "def_sacks")          private Integer defSacks;
+    @Column(name = "def_ints")           private Integer defInts;
+    @Column(name = "def_fum_rec")        private Integer defFumRecoveries;
+    @Column(name = "def_td")             private Integer defTd;
+    @Column(name = "def_safeties")       private Integer defSafeties;
+    @Column(name = "def_blocked_kicks")  private Integer defBlockedKicks;
+    @Column(name = "pts_allowed")        private Integer ptsAllowed;
+    @Column(name = "yds_allowed")        private Integer ydsAllowed;
+
     public PlayerStat() {}
 
     // Convenience: total FG made for kickers
@@ -137,4 +147,28 @@ public class PlayerStat {
 
     public Integer getFgMiss30_39() { return fgMiss30_39; }
     public void setFgMiss30_39(Integer fgMiss30_39) { this.fgMiss30_39 = fgMiss30_39; }
+
+    public Integer getDefSacks()         { return defSacks; }
+    public void setDefSacks(Integer v)   { this.defSacks = v; }
+
+    public Integer getDefInts()          { return defInts; }
+    public void setDefInts(Integer v)    { this.defInts = v; }
+
+    public Integer getDefFumRecoveries()       { return defFumRecoveries; }
+    public void setDefFumRecoveries(Integer v) { this.defFumRecoveries = v; }
+
+    public Integer getDefTd()            { return defTd; }
+    public void setDefTd(Integer v)      { this.defTd = v; }
+
+    public Integer getDefSafeties()      { return defSafeties; }
+    public void setDefSafeties(Integer v){ this.defSafeties = v; }
+
+    public Integer getDefBlockedKicks()       { return defBlockedKicks; }
+    public void setDefBlockedKicks(Integer v) { this.defBlockedKicks = v; }
+
+    public Integer getPtsAllowed()       { return ptsAllowed; }
+    public void setPtsAllowed(Integer v) { this.ptsAllowed = v; }
+
+    public Integer getYdsAllowed()       { return ydsAllowed; }
+    public void setYdsAllowed(Integer v) { this.ydsAllowed = v; }
 }

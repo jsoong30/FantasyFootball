@@ -98,7 +98,11 @@
                 style="border-bottom:1px solid var(--border);">
                 <td style="padding:8px 6px; color:var(--muted);"
                     th:text="${s != null and s.rank != null ? s.rank : '—'}">—</td>
-                <td style="padding:8px 6px; font-weight:600;" th:text="${p.fullName}">Player Name</td>
+                <td style="padding:8px 6px; font-weight:600;">
+                    <a th:href="@{/players/{id}(id=${p.id})}"
+                       style="color:var(--text); text-decoration:none;"
+                       th:text="${p.fullName}">Player Name</a>
+                </td>
                 <td class="col-pos" style="padding:8px 6px;">
                     <span th:text="${p.position}" style="font-weight:700; color:var(--brand);">QB</span>
                 </td>

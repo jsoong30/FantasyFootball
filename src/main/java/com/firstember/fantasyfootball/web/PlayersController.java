@@ -2,8 +2,10 @@ package com.firstember.fantasyfootball.web;
 
 import com.firstember.fantasyfootball.domain.Player;
 import com.firstember.fantasyfootball.domain.PlayerStat;
+import com.firstember.fantasyfootball.domain.PlayerWeeklyStat;
 import com.firstember.fantasyfootball.repo.PlayerRepository;
 import com.firstember.fantasyfootball.repo.PlayerStatRepository;
+import com.firstember.fantasyfootball.repo.PlayerWeeklyStatRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,11 +25,14 @@ public class PlayersController {
 
     private final PlayerRepository playerRepository;
     private final PlayerStatRepository playerStatRepository;
+    private final PlayerWeeklyStatRepository weeklyStatRepository;
 
     public PlayersController(PlayerRepository playerRepository,
-                             PlayerStatRepository playerStatRepository) {
+                             PlayerStatRepository playerStatRepository,
+                             PlayerWeeklyStatRepository weeklyStatRepository) {
         this.playerRepository = playerRepository;
         this.playerStatRepository = playerStatRepository;
+        this.weeklyStatRepository = weeklyStatRepository;
     }
 
     @GetMapping
@@ -76,9 +81,14 @@ public class PlayersController {
                     .count() + 1;
         }
 
+        List<PlayerWeeklyStat> weeklyStats = season != null
+                ? weeklyStatRepository.findByPlayer_IdAndSeasonOrderByWeekAsc(id, season)
+                : List.of();
+
         model.addAttribute("player", player);
         model.addAttribute("stat", stat);
         model.addAttribute("positionRank", positionRank);
+        model.addAttribute("weeklyStats", weeklyStats);
         return "players/detail";
     }
 
