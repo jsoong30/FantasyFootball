@@ -21,6 +21,7 @@
             <a th:href="@{/players}">Players</a>
             <a th:href="@{/teams}">Teams</a>
             <a th:href="@{/rankings}">Rankings</a>
+            <a th:href="@{/model}">Model</a>
             <a th:href="@{/admin/sync}" aria-current="page">Sync Data</a>
         </nav>
     </div>
@@ -73,6 +74,116 @@
         <a th:href="@{/players}" style="color:var(--brand);">Players</a> or
         <a th:href="@{/rankings}" style="color:var(--brand);">Rankings</a>
         to see the updated data.
+    </div>
+
+    <!-- Prediction sync card -->
+    <div class="card" style="margin-top:28px;">
+        <h2 style="margin:0 0 8px; font-size:1.05rem;">Sync AI Predictions</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 16px; line-height:1.6;">
+            Sends the selected season's stats to the Python ML model and stores
+            projected fantasy points for the target season. The Python server must
+            be running at <code>localhost:8000</code> with trained models loaded.
+        </p>
+
+        <!-- Result banner -->
+        <div th:if="${predictMessage != null}"
+             th:classappend="${predictSuccess} ? 'pred-banner-live' : ''"
+             class="pred-banner"
+             style="margin-bottom:16px;">
+            <span style="font-size:22px;" th:text="${predictSuccess} ? '✅' : '❌'">✅</span>
+            <div>
+                <strong th:text="${predictSuccess} ? 'Predictions synced' : 'Sync failed'">Result</strong>
+                <p th:text="${predictMessage}">Details here.</p>
+            </div>
+        </div>
+
+        <form th:action="@{/admin/predict}" method="post" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <label for="sourceSeason" style="font-size:13px; color:var(--muted);">Stats From</label>
+                <input id="sourceSeason" name="sourceSeason" type="number" value="2025" min="2020" max="2030"
+                       style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px; width:110px;">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <label for="targetSeason" style="font-size:13px; color:var(--muted);">Predict For</label>
+                <input id="targetSeason" name="targetSeason" type="number" value="2026" min="2021" max="2031"
+                       style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px; width:110px;">
+            </div>
+            <button type="submit" class="btn primary" style="padding:9px 22px;">
+                Run Predictions
+            </button>
+        </form>
+    </div>
+
+    <!-- Opponent backfill card -->
+    <div class="card" style="margin-top:28px;">
+        <h2 style="margin:0 0 8px; font-size:1.05rem;">Sync Opponent Data</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 16px; line-height:1.6;">
+            Fetches the NFL schedule from ESPN's public API and tags each weekly stat with the
+            opponent's team code. Run this for every season you have synced so the ML model
+            can use opponent-adjusted strength as a feature. Takes ~30 seconds per season.
+        </p>
+
+        <!-- Result banner -->
+        <div th:if="${opponentMessage != null}"
+             th:classappend="${opponentSuccess} ? 'pred-banner-live' : ''"
+             class="pred-banner"
+             style="margin-bottom:16px;">
+            <span style="font-size:22px;" th:text="${opponentSuccess} ? '✅' : '❌'">✅</span>
+            <div>
+                <strong th:text="${opponentSuccess} ? 'Opponent sync complete' : 'Sync failed'">Result</strong>
+                <p th:text="${opponentMessage}">Details here.</p>
+            </div>
+        </div>
+
+        <form th:action="@{/admin/sync-opponents}" method="post" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <label for="oppYear" style="font-size:13px; color:var(--muted);">Season Year</label>
+                <input id="oppYear" name="year" type="number" value="2025" min="2020" max="2030"
+                       style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px; width:120px;">
+            </div>
+            <button type="submit" class="btn primary" style="padding:9px 22px;">
+                Sync Opponents
+            </button>
+        </form>
+        <p style="margin:14px 0 0; color:var(--muted); font-size:12px;">
+            Run for each season: 2020, 2021, 2022, 2023, 2024, 2025
+        </p>
+    </div>
+
+    <!-- Export card -->
+    <div class="card" style="margin-top:28px;">
+        <h2 style="margin:0 0 8px; font-size:1.05rem;">Export Training Data</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 16px; line-height:1.6;">
+            Downloads flat CSVs of player stats for ML model training.
+            Export the <strong>season stats</strong> CSV first, then the <strong>weekly stats</strong>
+            CSV (used for opponent-adjusted schedule strength).
+        </p>
+
+        <p style="font-size:12px; font-weight:600; color:var(--muted); margin:0 0 8px; text-transform:uppercase; letter-spacing:.5px;">Season Stats</p>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+            <a th:href="@{/admin/export}" class="btn primary" style="padding:9px 22px; text-decoration:none;">
+                All Seasons
+            </a>
+            <a th:href="@{/admin/export(year=2025)}" class="btn" style="padding:9px 22px; text-decoration:none;">2025</a>
+            <a th:href="@{/admin/export(year=2024)}" class="btn" style="padding:9px 22px; text-decoration:none;">2024</a>
+            <a th:href="@{/admin/export(year=2023)}" class="btn" style="padding:9px 22px; text-decoration:none;">2023</a>
+            <a th:href="@{/admin/export(year=2022)}" class="btn" style="padding:9px 22px; text-decoration:none;">2022</a>
+            <a th:href="@{/admin/export(year=2021)}" class="btn" style="padding:9px 22px; text-decoration:none;">2021</a>
+            <a th:href="@{/admin/export(year=2020)}" class="btn" style="padding:9px 22px; text-decoration:none;">2020</a>
+        </div>
+
+        <p style="font-size:12px; font-weight:600; color:var(--muted); margin:0 0 8px; text-transform:uppercase; letter-spacing:.5px;">Weekly Stats (for schedule strength)</p>
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <a th:href="@{/admin/export/weekly}" class="btn" style="padding:9px 22px; text-decoration:none;">
+                All Seasons (Weekly)
+            </a>
+        </div>
+        <p style="margin:10px 0 0; color:var(--muted); font-size:12px;">
+            Save as <code>ml/data/fantasy_weekly_all.csv</code>
+        </p>
     </div>
 </main>
 

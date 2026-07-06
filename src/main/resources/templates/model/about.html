@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About the Model — FantasyFootball</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <span style="font-size:22px;">🏈</span>
+            <div>
+                <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
+                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;">2024 NFL · AI Predictions</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a th:href="@{/players}">Players</a>
+            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/stats}">Stats</a>
+            <a th:href="@{/predictions}">Predictions</a>
+            <a th:href="@{/model}" aria-current="page">Model</a>
+            <a th:href="@{/players}" class="btn primary" style="margin-left:20px;padding:7px 16px;font-size:13px;">Get Started</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0 48px;">
+
+    <!-- Page heading -->
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+        <div>
+            <h1 style="margin:0 0 4px;">About Our Model</h1>
+            <p class="muted" style="margin:0;">How the AI prediction engine actually works</p>
+        </div>
+        <div class="ai-badge" style="font-size:13px; padding:6px 16px;">🤖 Gradient Boosting · 6 position models</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="card" style="margin-bottom:20px;">
+        <h2>Overview</h2>
+        <p style="margin:0 0 10px;">
+            We train one <strong>GradientBoostingRegressor</strong> (scikit-learn) per position —
+            <strong>QB, RB, WR, TE, K, DST</strong> — rather than a single model for every player.
+            Each position scores fantasy points differently, so keeping the models separate lets each
+            one learn the stat patterns that actually matter for that position instead of averaging
+            them all together.
+        </p>
+        <p style="margin:0 0 10px;">
+            <strong>What it predicts:</strong> a player's total PPR fantasy points for the
+            <em>next</em> season, using their most recently completed season's stats as input.
+        </p>
+        <p style="margin:0;">
+            <strong>Hyperparameters</strong> (same for every position):
+            <code>n_estimators=200, max_depth=3, learning_rate=0.05, subsample=0.8</code>.
+            Shallow trees (depth 3) and a slow learning rate keep the model from overfitting to
+            single standout seasons, which matters given how much year-to-year variance fantasy
+            football has.
+        </p>
+    </div>
+
+    <!-- Training target -->
+    <div class="card" style="margin-bottom:20px;">
+        <h2>Training Target</h2>
+        <p style="margin:0;">
+            The target is Sleeper's <code>pts_ppr</code> value — the PPR-scored fantasy total Sleeper
+            already computes server-side from raw box scores. We store that number directly as
+            <code>total_points</code> rather than re-deriving it from raw stats, so the model is
+            always learning to predict the exact scoring system fantasy managers see.
+        </p>
+    </div>
+
+    <!-- Feature groups -->
+    <div class="card" style="margin-bottom:20px;">
+        <h2>Metrics the Model Trains On</h2>
+        <p style="margin:0 0 18px;">
+            Every metric below is computed from historical <strong>Sleeper</strong> season/weekly
+            stats and <strong>ESPN</strong> schedule data. Features are grouped by what they capture.
+        </p>
+
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; min-width:640px;">
+                <thead>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <th style="text-align:left; padding:8px 6px; width:20%;">Metric</th>
+                    <th style="text-align:left; padding:8px 6px; width:52%;">What it Captures</th>
+                    <th style="text-align:left; padding:8px 6px; width:28%;">Used By</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td colspan="3" style="padding:14px 6px 4px; font-weight:700; color:var(--brand);">Core Productivity</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>total_points</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Prior season's PPR fantasy points — the single strongest predictor of future output.</td>
+                    <td style="padding:8px 6px;">All positions</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>points_per_game</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Total points ÷ games played. Normalizes production for players who missed time.</td>
+                    <td style="padding:8px 6px;">All positions</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>games_played</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Availability / durability signal, counted from weekly stat rows.</td>
+                    <td style="padding:8px 6px;">All positions</td>
+                </tr>
+
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td colspan="3" style="padding:14px 6px 4px; font-weight:700; color:var(--brand);">Age Curve</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>age</code>, <code>age_sq</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Player's age and its square, letting the model fit a curved (rise-peak-decline) aging pattern instead of a straight line.</td>
+                    <td style="padding:8px 6px;">QB, RB, WR, TE, K <span class="muted">(not DST — team unit, no single age)</span></td>
+                </tr>
+
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td colspan="3" style="padding:14px 6px 4px; font-weight:700; color:var(--brand);">Trend / Momentum (Two-Season Lag)</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>prev2_total_points</code>, <code>prev2_points_per_game</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Season N-2 stats (two seasons before the target), giving the model a second data point to judge direction, not just level.</td>
+                    <td style="padding:8px 6px;">All positions</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>pts_delta</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Change in total points vs. two seasons ago. Zeroed out for rookies (see <code>has_prev2</code>) so it never fakes an "improvement."</td>
+                    <td style="padding:8px 6px;">All positions</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>has_prev2</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">1 if the player has data from two seasons ago, 0 if this is only their second pro season. Flags rookies for the blending guardrail below.</td>
+                    <td style="padding:8px 6px;">All positions</td>
+                </tr>
+
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td colspan="3" style="padding:14px 6px 4px; font-weight:700; color:var(--brand);">Weekly Consistency / Volatility</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>weekly_pts_std</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Standard deviation of weekly PPR scores — a boom/bust indicator. High = volatile week to week.</td>
+                    <td style="padding:8px 6px;">All positions</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>floor</code> / <code>ceiling</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Average of the player's worst 4 and best 4 weeks — captures realistic downside/upside beyond a single-number average.</td>
+                    <td style="padding:8px 6px;">All positions</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>games_over_10</code> / <code>games_over_20</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Count of weeks scoring above 10 / 20 fantasy points — reliability thresholds fantasy managers actually care about.</td>
+                    <td style="padding:8px 6px;">QB, RB, WR, TE <span class="muted">(K uses none, DST uses none)</span></td>
+                </tr>
+
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td colspan="3" style="padding:14px 6px 4px; font-weight:700; color:var(--brand);">Schedule Strength</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>opp_pts_allowed</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Average points the player's opponents allowed to that position, computed from ESPN matchup data. Higher = easier schedule faced. Defaults to 0.0 when opponent data hasn't been backfilled for a season.</td>
+                    <td style="padding:8px 6px;">QB, RB, WR, TE, K <span class="muted">(not DST)</span></td>
+                </tr>
+
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td colspan="3" style="padding:14px 6px 4px; font-weight:700; color:var(--brand);">Position-Specific Box Score Stats</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>passing_yds</code>, <code>passing_td</code>, <code>passing_int</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Raw passing production.</td>
+                    <td style="padding:8px 6px;">QB</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>rushing_yds</code>, <code>rushing_td</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Raw rushing production.</td>
+                    <td style="padding:8px 6px;">QB, RB</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>targets</code>, <code>receiving_rec</code>, <code>receiving_yds</code>, <code>receiving_td</code>, <code>reception_pct</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Receiving volume and efficiency (catches ÷ targets).</td>
+                    <td style="padding:8px 6px;">RB, WR, TE</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px;"><code>fg_made</code>, <code>pat_made</code>, <code>pat_missed</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Kicking volume and reliability.</td>
+                    <td style="padding:8px 6px;">K</td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 6px;"><code>def_sacks</code>, <code>def_ints</code>, <code>def_fum_rec</code>, <code>def_td</code>, <code>def_safeties</code>, <code>def_blocked_kicks</code>, <code>pts_allowed</code></td>
+                    <td style="padding:8px 6px; color:var(--muted);">Team defensive/special-teams production and points surrendered.</td>
+                    <td style="padding:8px 6px;">DST</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Guardrails -->
+    <div class="card" style="margin-bottom:20px;">
+        <h2>Guardrails Applied After Prediction</h2>
+        <p style="margin:0 0 16px;">
+            The raw model output isn't shown as-is — two rules run afterward in <code>serve.py</code>
+            to correct known failure modes.
+        </p>
+        <div class="ai-features">
+            <div class="ai-feature">
+                <span class="ai-feature-icon">🌱</span>
+                <div>
+                    <strong>Rookie Blending</strong>
+                    <p>Players entering only their second season (<code>has_prev2 = 0</code>) have no trend
+                        context, so the model tends to over-extrapolate from one data point. Their projection
+                        is blended 55% model output / 45% that season's position-wide average among
+                        established veterans.</p>
+                </div>
+            </div>
+            <div class="ai-feature">
+                <span class="ai-feature-icon">🧢</span>
+                <div>
+                    <strong>Improvement Cap</strong>
+                    <p>No player's projection can exceed <strong>1.40×</strong> their prior season's total
+                        points. This still allows genuine breakout seasons while preventing the model from
+                        projecting runaway, unrealistic jumps.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accuracy -->
+    <div class="card" style="margin-bottom:20px;">
+        <h2>Measured Accuracy</h2>
+        <p style="margin:0 0 16px;">
+            Accuracy is measured with <strong>walk-forward validation</strong> — the model trains only on
+            past seasons and is tested on a season it has never seen, mimicking how it's actually used.
+            We deliberately avoid random k-fold cross-validation here since shuffling seasons randomly
+            would leak future information into training and produce an overly optimistic score.
+        </p>
+        <div class="grid" style="grid-template-columns:repeat(6,1fr); gap:12px; padding:0;">
+            <div class="stat-box"><div class="stat-val">88.5</div><div class="stat-lbl">QB MAE</div></div>
+            <div class="stat-box"><div class="stat-val">60.1</div><div class="stat-lbl">RB MAE</div></div>
+            <div class="stat-box"><div class="stat-val">49.8</div><div class="stat-lbl">WR MAE</div></div>
+            <div class="stat-box"><div class="stat-val">36.7</div><div class="stat-lbl">TE MAE</div></div>
+            <div class="stat-box"><div class="stat-val">34.9</div><div class="stat-lbl">K MAE</div></div>
+            <div class="stat-box"><div class="stat-val">28.5</div><div class="stat-lbl">DST MAE</div></div>
+        </div>
+        <p class="muted" style="margin:14px 0 0; font-size:13px;">
+            Mean Absolute Error in projected season PPR points, based on 2020–2025 data. Overall average
+            across positions: ~49.7 pts.
+        </p>
+    </div>
+
+    <!-- Data pipeline -->
+    <div class="card" style="margin-bottom:20px;">
+        <h2>Where the Data Comes From</h2>
+        <p style="margin:0 0 10px;">
+            Season and weekly stats are pulled from the free <strong>Sleeper API</strong> (no key
+            required), covering 2020–2025. Opponent matchups per week come from
+            <strong>ESPN's</strong> public scoreboard API, used only to compute the
+            <code>opp_pts_allowed</code> schedule-strength feature — team codes between the two sources
+            are normalized (e.g. Sleeper's "LVR" → "LV", ESPN's "WSH" → "WAS") so players and
+            opponents match up correctly across systems.
+        </p>
+        <p style="margin:0;">
+            Training data is built as (season N stats + season N-1 trend) → (season N+1 actual points)
+            pairs, so a model trained today learns from every 2020→21, 2021→22 … 2024→25 transition
+            in the data at once.
+        </p>
+    </div>
+
+    <!-- Limitations -->
+    <div class="card">
+        <h2>Known Limitations</h2>
+        <p style="margin:0 0 10px;">The model currently does <em>not</em> account for:</p>
+        <ul style="margin:0; padding-left:20px; color:var(--muted); line-height:1.9;">
+            <li>Injury history or current injury/practice status</li>
+            <li>Target share, snap share, or backfield/depth-chart competition</li>
+            <li>Coaching or scheme changes (new OC/HC, run-first vs. pass-first shifts)</li>
+            <li>Draft capital, ADP, or market consensus</li>
+            <li>Teammate movement (e.g. a WR1 leaving in free agency)</li>
+            <li>League-wide scoring inflation/deflation across seasons</li>
+        </ul>
+    </div>
+
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2026</span>
+    </div>
+</footer>
+</body>
+</html>

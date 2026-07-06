@@ -6,4 +6,10 @@ import java.util.List;
 
 public interface TeamRepository extends JpaRepository<Team, Long> {
     List<Team> findAllByOrderByCodeAsc();
+
+    // Excludes the "FA" (Free Agent) placeholder team used to associate
+    // teamless players — it isn't a real NFL team and shouldn't appear
+    // in team listings or counts.
+    List<Team> findByCodeNotOrderByCodeAsc(String code);
+    long countByCodeNot(String code);
 }

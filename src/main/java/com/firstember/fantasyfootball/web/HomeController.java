@@ -22,7 +22,7 @@ public class HomeController {
         model.addAttribute("appName", "FantasyFootball");
         model.addAttribute("welcomeMsg", "Welcome to your Fantasy Football Tracker!");
         model.addAttribute("playerCount", playerRepository.count());
-        model.addAttribute("teamCount", teamRepository.count());
+        model.addAttribute("teamCount", teamRepository.countByCodeNot("FA"));
         return "index";
     }
 }

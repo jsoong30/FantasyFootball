@@ -2,7 +2,18 @@
   "permissions": {
     "allow": [
       "Bash(find /c/Users/jacks/OneDrive/Documents/GitHub/FantasyFootball/FantasyFootball/src -type f \\\\\\(-name *.java -o -name *.html -o -name *.sql -o -name *.csv \\\\\\))",
-      "Bash(wc -l /c/Users/jacks/OneDrive/Documents/GitHub/FantasyFootball/FantasyFootball/src/main/resources/data/*.csv)"
+      "Bash(wc -l /c/Users/jacks/OneDrive/Documents/GitHub/FantasyFootball/FantasyFootball/src/main/resources/data/*.csv)",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\jacks\\\\OneDrive\\\\Documents\\\\jacksPC\\\\GithubPC\\\\FantasyFootball\\\\ml\\\\data\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\jacks\\\\OneDrive\\\\Documents\\\\jacksPC\\\\GithubPC\\\\FantasyFootball\\\\ml\\\\models\")",
+      "Bash(mvnw.cmd compile *)",
+      "Bash(./mvnw compile *)",
+      "Bash(./mvnw clean *)",
+      "Bash(./mvnw package *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8080/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8080/model)",
+      "Bash(curl -s http://localhost:8080/model)",
+      "Bash(curl -s http://localhost:8080/teams)",
+      "Bash(curl -s http://localhost:8080/)"
     ]
   }
 }

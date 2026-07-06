@@ -36,8 +36,8 @@ public class TeamsController {
 
     @GetMapping
     public String list(Model model) {
-        model.addAttribute("teams", teamRepository.findAllByOrderByCodeAsc());
-        model.addAttribute("teamCount", teamRepository.count());
+        model.addAttribute("teams", teamRepository.findByCodeNotOrderByCodeAsc("FA"));
+        model.addAttribute("teamCount", teamRepository.countByCodeNot("FA"));
         return "teams/index";
     }
 

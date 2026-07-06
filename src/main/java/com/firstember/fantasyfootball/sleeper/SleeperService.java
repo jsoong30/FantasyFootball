@@ -43,6 +43,15 @@ public class SleeperService {
             "JAC", "JAX"
     );
 
+    /**
+     * ESPN uses slightly different abbreviations than our DB for a handful of teams.
+     * Map ESPN abbreviation → our DB code.
+     */
+    private static final Map<String, String> ESPN_CODE_FIX = Map.of(
+            "WSH", "WAS",   // Washington Commanders
+            "LA",  "LAR"    // ESPN sometimes drops the R for the Rams
+    );
+
     private final RestTemplate restTemplate;
     private final PlayerRepository playerRepository;
     private final PlayerStatRepository playerStatRepository;
@@ -77,6 +86,9 @@ public class SleeperService {
         // 2) Fetch all 18 weeks of raw stat maps in one pass
         Map<Integer, Map<String, Map<String, Object>>> allWeeklyRaw = fetchAllWeeklyRaw(year);
         log.info("Fetched {} weeks of stats", allWeeklyRaw.size());
+
+        // 2b) Fetch the ESPN schedule (week → teamCode → opponentCode) for opponent tagging
+        Map<Integer, Map<String, String>> scheduleByWeek = fetchEspnScheduleAllWeeks(year);
 
         // 3) Accumulate season totals from the raw weekly data
         Map<String, SleeperStatsDTO> seasonStats = accumulateFromRaw(allWeeklyRaw);
@@ -119,7 +131,7 @@ public class SleeperService {
         log.info("Season totals — created={}, updated={}, skipped={}", created, updated, skipped);
 
         // 6) Save per-week stats for every saved player
-        int weeklySaved = saveWeeklyStats(year, allWeeklyRaw, savedPlayers);
+        int weeklySaved = saveWeeklyStats(year, allWeeklyRaw, savedPlayers, scheduleByWeek);
         log.info("Saved {} player-week records", weeklySaved);
 
         // 7) Recalculate overall ranks
@@ -129,6 +141,51 @@ public class SleeperService {
         return String.format(
                 "Season %d sync complete — %d players created, %d updated, %d weekly records saved, %d ranked.",
                 year, created, updated, weeklySaved, ranked);
+    }
+
+    // ── Opponent backfill ─────────────────────────────────────────────────────
+
+    /**
+     * Backfill {@code opponent_code} on every existing PlayerWeeklyStat for the given season
+     * by fetching the NFL schedule from ESPN's public scoreboard API (no key required).
+     *
+     * Safe to call multiple times — only writes when the code is missing or changed.
+     *
+     * @return human-readable summary string
+     */
+    @Transactional
+    public String backfillOpponents(int year) {
+        log.info("Backfilling opponent_code for season {} via ESPN schedule", year);
+        int total = 0;
+
+        for (int week = 1; week <= REGULAR_SEASON_WEEKS; week++) {
+            Map<String, String> scheduleMap = fetchEspnScheduleForWeek(year, week);
+            if (scheduleMap.isEmpty()) {
+                log.debug("No ESPN schedule data for {}/week {} — skipping", year, week);
+                continue;
+            }
+
+            List<PlayerWeeklyStat> weekStats = weeklyStatRepository.findBySeasonAndWeek(year, week);
+            List<PlayerWeeklyStat> toSave = new ArrayList<>();
+            for (PlayerWeeklyStat w : weekStats) {
+                String teamCode = w.getPlayer().getTeam() != null
+                        ? w.getPlayer().getTeam().getCode() : null;
+                String opp = teamCode != null ? scheduleMap.get(teamCode) : null;
+                if (opp != null && !opp.equals(w.getOpponentCode())) {
+                    w.setOpponentCode(opp);
+                    toSave.add(w);
+                }
+            }
+            if (!toSave.isEmpty()) {
+                weeklyStatRepository.saveAll(toSave);
+                total += toSave.size();
+                log.debug("Week {} — backfilled {} records", week, toSave.size());
+            }
+        }
+
+        String msg = String.format("Opponent backfill complete for season %d — %d records updated.", year, total);
+        log.info(msg);
+        return msg;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -182,10 +239,12 @@ public class SleeperService {
      * Save one PlayerWeeklyStat per (player, week) for every player we successfully saved.
      * Batch-loads all existing records upfront to avoid per-row queries and duplicate-key errors
      * when re-syncing a season that was already loaded.
+     * Also tags each record with the opponent team code from the ESPN schedule map.
      */
     private int saveWeeklyStats(int year,
                                 Map<Integer, Map<String, Map<String, Object>>> allWeeklyRaw,
-                                Map<String, Player> savedPlayers) {
+                                Map<String, Player> savedPlayers,
+                                Map<Integer, Map<String, String>> scheduleByWeek) {
 
         // Build reverse map: DB player id → sleeper player id
         Map<Long, String> idToSleeper = new HashMap<>();
@@ -204,6 +263,7 @@ public class SleeperService {
         int count = 0;
         for (Map.Entry<Integer, Map<String, Map<String, Object>>> weekEntry : allWeeklyRaw.entrySet()) {
             int week = weekEntry.getKey();
+            Map<String, String> scheduleMap = scheduleByWeek.getOrDefault(week, Map.of());
             List<PlayerWeeklyStat> toSave = new ArrayList<>();
 
             for (Map.Entry<String, Map<String, Object>> playerEntry : weekEntry.getValue().entrySet()) {
@@ -217,6 +277,12 @@ public class SleeperService {
                 // Find existing record or create new — no individual DB query needed
                 String key = player.getId() + "_" + week;
                 PlayerWeeklyStat w = existing.getOrDefault(key, new PlayerWeeklyStat());
+
+                // Opponent code: look up who the player's team faced this week
+                String teamCode = player.getTeam() != null ? player.getTeam().getCode() : null;
+                if (teamCode != null) {
+                    w.setOpponentCode(scheduleMap.get(teamCode));
+                }
 
                 w.setPlayer(player);
                 w.setSeason(year);
@@ -253,6 +319,71 @@ public class SleeperService {
             count += toSave.size();
         }
         return count;
+    }
+
+    /**
+     * Fetch the NFL schedule for all 18 regular-season weeks from ESPN's public API.
+     * Returns Map&lt;week, Map&lt;teamCode, opponentCode&gt;&gt;.
+     */
+    private Map<Integer, Map<String, String>> fetchEspnScheduleAllWeeks(int year) {
+        Map<Integer, Map<String, String>> result = new LinkedHashMap<>();
+        for (int week = 1; week <= REGULAR_SEASON_WEEKS; week++) {
+            result.put(week, fetchEspnScheduleForWeek(year, week));
+        }
+        return result;
+    }
+
+    /**
+     * Fetch one week's matchups from ESPN's public scoreboard API (no key required).
+     * Returns Map&lt;teamCode, opponentCode&gt; — both sides added so either team can be looked up.
+     * Returns an empty map on any failure (network error, unexpected format, etc.).
+     *
+     * Example URL: https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard
+     *              ?seasontype=2&season=2024&week=1
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, String> fetchEspnScheduleForWeek(int year, int week) {
+        String url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+                   + "?seasontype=2&season=" + year + "&week=" + week;
+        try {
+            Map<?, ?> body = restTemplate.getForObject(url, Map.class);
+            if (body == null) return Map.of();
+
+            List<?> events = (List<?>) body.get("events");
+            if (events == null) return Map.of();
+
+            Map<String, String> schedule = new HashMap<>();
+            for (Object event : events) {
+                Map<?, ?> eventMap = (Map<?, ?>) event;
+                List<?> competitions = (List<?>) eventMap.get("competitions");
+                if (competitions == null || competitions.isEmpty()) continue;
+
+                Map<?, ?> competition = (Map<?, ?>) competitions.get(0);
+                List<?> competitors = (List<?>) competition.get("competitors");
+                if (competitors == null || competitors.size() < 2) continue;
+
+                String code1 = espnTeamAbbr((Map<?, ?>) competitors.get(0));
+                String code2 = espnTeamAbbr((Map<?, ?>) competitors.get(1));
+                if (code1 != null && code2 != null) {
+                    schedule.put(normalizeEspnCode(code1), normalizeEspnCode(code2));
+                    schedule.put(normalizeEspnCode(code2), normalizeEspnCode(code1));
+                }
+            }
+            return schedule;
+        } catch (Exception e) {
+            log.debug("ESPN schedule unavailable for {}/week {}: {}", year, week, e.getMessage());
+            return Map.of();
+        }
+    }
+
+    private static String espnTeamAbbr(Map<?, ?> competitor) {
+        Map<?, ?> team = (Map<?, ?>) competitor.get("team");
+        return team != null ? (String) team.get("abbreviation") : null;
+    }
+
+    private static String normalizeEspnCode(String code) {
+        if (code == null) return null;
+        return ESPN_CODE_FIX.getOrDefault(code, code);
     }
 
     private Player upsertPlayer(SleeperPlayerDTO dto, String extId, int year,

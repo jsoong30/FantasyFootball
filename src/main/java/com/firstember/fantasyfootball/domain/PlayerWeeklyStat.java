@@ -51,6 +51,10 @@ public class PlayerWeeklyStat {
     @Column(name = "def_blk_kick")  private Integer defBlockedKicks;
     @Column(name = "pts_allowed")   private Integer ptsAllowed;
 
+    /** The team code of the defense this player faced that week (e.g. "KC", "SF"). Nullable — backfilled via ESPN schedule. */
+    @Column(name = "opponent_code", length = 10)
+    private String opponentCode;
+
     public PlayerWeeklyStat() {}
 
     // ── Getters & Setters ──────────────────────────────────────────────────
@@ -128,4 +132,7 @@ public class PlayerWeeklyStat {
 
     public Integer getPtsAllowed()                  { return ptsAllowed; }
     public void setPtsAllowed(Integer v)            { this.ptsAllowed = v; }
+
+    public String getOpponentCode()                 { return opponentCode; }
+    public void setOpponentCode(String v)           { this.opponentCode = v; }
 }
