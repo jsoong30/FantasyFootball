@@ -2,6 +2,8 @@ package com.firstember.fantasyfootball.domain;
 
 import jakarta.persistence.*;
 
+import java.time.LocalDate;
+
 @Entity
 @Table(name = "players",
         uniqueConstraints = @UniqueConstraint(name = "uq_player", columnNames = {"season", "full_name", "position", "team_id"}))
@@ -32,6 +34,17 @@ public class Player {
 
     private Integer age;
 
+    // Sleeper's date of birth for this player. Used to compute a season-accurate
+    // `age` instead of stamping the player's current age onto every historical
+    // season row (Sleeper's /players/nfl feed only ever returns today's age).
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
+    // Sleeper's *current* roster status (e.g. "Active", "Inactive", "Injured Reserve").
+    // This is a live snapshot, not season-specific history — every season row for a
+    // player gets whatever status was true the last time a sync ran. Do NOT use this
+    // as a historical training feature. It's only meaningful as a prediction-time
+    // signal (see MlPredictionService / serve.py status guardrail).
     private String status;
 
     public Player() {}
@@ -62,6 +75,9 @@ public class Player {
 
     public Integer getAge() { return age; }
     public void setAge(Integer age) { this.age = age; }
+
+    public LocalDate getBirthDate() { return birthDate; }
+    public void setBirthDate(LocalDate birthDate) { this.birthDate = birthDate; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

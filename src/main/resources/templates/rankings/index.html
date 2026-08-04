@@ -20,6 +20,7 @@
         <nav class="nav">
             <a th:href="@{/players}">Players</a>
             <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/stats}">Stats</a>
             <a th:href="@{/rankings}" aria-current="page">Rankings</a>
             <a th:href="@{/predictions}">Predictions</a>
             <a th:href="@{/model}">Model</a>
@@ -63,14 +64,24 @@
         <a th:href="@{/rankings(year=${selectedYear}, position='K')}"
            th:classappend="${selectedPosition == 'K'} ? ' primary' : ''"
            class="btn">K</a>
+        <a th:href="@{/rankings(year=${selectedYear}, position='DST')}"
+           th:classappend="${selectedPosition == 'DST'} ? ' primary' : ''"
+           class="btn">DST</a>
     </div>
 
-    <!-- Search -->
-    <div style="margin-bottom:16px;">
+    <!-- Search + team filter -->
+    <div style="margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
         <input id="searchInput" type="text" placeholder="Search player name..."
                oninput="filterTable(this.value)"
                style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
                       background:var(--panel); color:var(--text); font-size:14px; width:260px;">
+        <select id="teamFilter" onchange="filterTeam(this.value)"
+                style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                       background:var(--panel); color:var(--text); font-size:14px;">
+            <option value="ALL">All Teams</option>
+            <option th:each="t : ${#sets.toSet(stats.![player.team?.code])}"
+                    th:if="${t != null}" th:value="${t}" th:text="${t}">KC</option>
+        </select>
     </div>
 
     <!-- Rankings Table -->
@@ -78,24 +89,51 @@
         <table style="width:100%; border-collapse:collapse; min-width:500px;">
             <thead>
             <tr style="border-bottom:1px solid var(--border);">
-                <th style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Rank</th>
-                <th style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Player</th>
-                <th style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Pos</th>
-                <th style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Team</th>
-                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Fantasy Pts</th>
-                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Pass Yds</th>
-                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rush Yds</th>
-                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rec Yds</th>
-                <th style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">TDs</th>
+                <th data-sort="num" style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Rank</th>
+                <th data-sort="text" style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Player</th>
+                <th data-sort="text" style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Pos</th>
+                <th data-sort="text" style="text-align:left; padding:10px 8px; color:var(--muted); font-size:13px;">Team</th>
+                <th data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Fantasy Pts</th>
+
+                <th th:if="${selectedPosition == 'ALL'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Pass Yds</th>
+                <th th:if="${selectedPosition == 'ALL'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rush Yds</th>
+                <th th:if="${selectedPosition == 'ALL'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rec Yds</th>
+                <th th:if="${selectedPosition == 'ALL'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">TDs</th>
+
+                <th th:if="${selectedPosition == 'QB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Pass Yds</th>
+                <th th:if="${selectedPosition == 'QB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Pass TD</th>
+                <th th:if="${selectedPosition == 'QB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">INT</th>
+                <th th:if="${selectedPosition == 'QB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rush Yds</th>
+                <th th:if="${selectedPosition == 'QB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rush TD</th>
+
+                <th th:if="${selectedPosition == 'RB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rush Yds</th>
+                <th th:if="${selectedPosition == 'RB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rush TD</th>
+                <th th:if="${selectedPosition == 'RB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rec</th>
+                <th th:if="${selectedPosition == 'RB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rec Yds</th>
+                <th th:if="${selectedPosition == 'RB'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rec TD</th>
+
+                <th th:if="${selectedPosition == 'WR' or selectedPosition == 'TE'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Targets</th>
+                <th th:if="${selectedPosition == 'WR' or selectedPosition == 'TE'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rec</th>
+                <th th:if="${selectedPosition == 'WR' or selectedPosition == 'TE'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rec Yds</th>
+                <th th:if="${selectedPosition == 'WR' or selectedPosition == 'TE'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Rec TD</th>
+
+                <th th:if="${selectedPosition == 'K'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">PAT Made</th>
+                <th th:if="${selectedPosition == 'K'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">PAT Miss</th>
+                <th th:if="${selectedPosition == 'K'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">FG Made</th>
+
+                <th th:if="${selectedPosition == 'DST'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Sacks</th>
+                <th th:if="${selectedPosition == 'DST'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Def INT</th>
+                <th th:if="${selectedPosition == 'DST'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Def TD</th>
+                <th th:if="${selectedPosition == 'DST'}" data-sort="num" style="text-align:right; padding:10px 8px; color:var(--muted); font-size:13px;">Pts Allowed</th>
             </tr>
             </thead>
             <tbody id="rankingsBody">
             <tr th:each="s, iter : ${stats}"
-                th:attr="data-name=${s.player.fullName}"
+                th:attr="data-name=${s.player.fullName},data-team=${s.player.team != null ? s.player.team.code : ''}"
                 style="border-bottom:1px solid var(--border); transition:background .15s;"
                 onmouseover="this.style.background='var(--border)'"
                 onmouseout="this.style.background=''">
-                <td style="padding:10px 8px; color:var(--muted); font-weight:600;"
+                <td style="padding:10px 8px; color:var(--muted); font-weight:600;" th:attr="data-v=${iter.index + 1}"
                     th:text="${iter.index + 1}">1</td>
                 <td style="padding:10px 8px; font-weight:600;">
                     <a th:href="@{/players/{id}(id=${s.player.id})}"
@@ -109,16 +147,64 @@
                 </td>
                 <td style="padding:10px 8px; color:var(--muted);"
                     th:text="${s.player.team != null ? s.player.team.code : '—'}">KC</td>
-                <td style="padding:10px 8px; text-align:right; font-weight:700; color:var(--brand);"
+                <td style="padding:10px 8px; text-align:right; font-weight:700; color:var(--brand);" th:attr="data-v=${s.totalPoints ?: 0}"
                     th:text="${s.totalPoints != null ? #numbers.formatDecimal(s.totalPoints,1,1) : '—'}">0</td>
-                <td style="padding:10px 8px; text-align:right; color:var(--muted);"
+
+                <td th:if="${selectedPosition == 'ALL'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.passingYds ?: 0}"
                     th:text="${s.passingYds != null and s.passingYds > 0 ? s.passingYds : '—'}">—</td>
-                <td style="padding:10px 8px; text-align:right; color:var(--muted);"
+                <td th:if="${selectedPosition == 'ALL'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.rushingYds ?: 0}"
                     th:text="${s.rushingYds != null and s.rushingYds > 0 ? s.rushingYds : '—'}">—</td>
-                <td style="padding:10px 8px; text-align:right; color:var(--muted);"
+                <td th:if="${selectedPosition == 'ALL'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.receivingYds ?: 0}"
                     th:text="${s.receivingYds != null and s.receivingYds > 0 ? s.receivingYds : '—'}">—</td>
-                <td style="padding:10px 8px; text-align:right; color:var(--muted);"
+                <td th:if="${selectedPosition == 'ALL'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${(s.passingTd ?: 0) + (s.rushingTd ?: 0) + (s.receivingTd ?: 0)}"
                     th:text="${(s.passingTd ?: 0) + (s.rushingTd ?: 0) + (s.receivingTd ?: 0)}">0</td>
+
+                <td th:if="${selectedPosition == 'QB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.passingYds ?: 0}"
+                    th:text="${s.passingYds != null ? s.passingYds : '—'}">—</td>
+                <td th:if="${selectedPosition == 'QB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.passingTd ?: 0}"
+                    th:text="${s.passingTd != null ? s.passingTd : '—'}">—</td>
+                <td th:if="${selectedPosition == 'QB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.passingInt ?: 0}"
+                    th:text="${s.passingInt != null ? s.passingInt : '—'}">—</td>
+                <td th:if="${selectedPosition == 'QB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.rushingYds ?: 0}"
+                    th:text="${s.rushingYds != null ? s.rushingYds : '—'}">—</td>
+                <td th:if="${selectedPosition == 'QB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.rushingTd ?: 0}"
+                    th:text="${s.rushingTd != null ? s.rushingTd : '—'}">—</td>
+
+                <td th:if="${selectedPosition == 'RB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.rushingYds ?: 0}"
+                    th:text="${s.rushingYds != null ? s.rushingYds : '—'}">—</td>
+                <td th:if="${selectedPosition == 'RB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.rushingTd ?: 0}"
+                    th:text="${s.rushingTd != null ? s.rushingTd : '—'}">—</td>
+                <td th:if="${selectedPosition == 'RB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.receivingRec ?: 0}"
+                    th:text="${s.receivingRec != null ? s.receivingRec : '—'}">—</td>
+                <td th:if="${selectedPosition == 'RB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.receivingYds ?: 0}"
+                    th:text="${s.receivingYds != null ? s.receivingYds : '—'}">—</td>
+                <td th:if="${selectedPosition == 'RB'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.receivingTd ?: 0}"
+                    th:text="${s.receivingTd != null ? s.receivingTd : '—'}">—</td>
+
+                <td th:if="${selectedPosition == 'WR' or selectedPosition == 'TE'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.targets ?: 0}"
+                    th:text="${s.targets != null ? s.targets : '—'}">—</td>
+                <td th:if="${selectedPosition == 'WR' or selectedPosition == 'TE'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.receivingRec ?: 0}"
+                    th:text="${s.receivingRec != null ? s.receivingRec : '—'}">—</td>
+                <td th:if="${selectedPosition == 'WR' or selectedPosition == 'TE'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.receivingYds ?: 0}"
+                    th:text="${s.receivingYds != null ? s.receivingYds : '—'}">—</td>
+                <td th:if="${selectedPosition == 'WR' or selectedPosition == 'TE'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.receivingTd ?: 0}"
+                    th:text="${s.receivingTd != null ? s.receivingTd : '—'}">—</td>
+
+                <td th:if="${selectedPosition == 'K'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.patMade ?: 0}"
+                    th:text="${s.patMade != null ? s.patMade : '—'}">—</td>
+                <td th:if="${selectedPosition == 'K'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.patMissed ?: 0}"
+                    th:text="${s.patMissed != null ? s.patMissed : '—'}">—</td>
+                <td th:if="${selectedPosition == 'K'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.patMade != null ? s.totalFgMade() : 0}"
+                    th:text="${s.patMade != null ? s.totalFgMade() : '—'}">—</td>
+
+                <td th:if="${selectedPosition == 'DST'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.defSacks ?: 0}"
+                    th:text="${s.defSacks != null ? s.defSacks : '—'}">—</td>
+                <td th:if="${selectedPosition == 'DST'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.defInts ?: 0}"
+                    th:text="${s.defInts != null ? s.defInts : '—'}">—</td>
+                <td th:if="${selectedPosition == 'DST'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.defTd ?: 0}"
+                    th:text="${s.defTd != null ? s.defTd : '—'}">—</td>
+                <td th:if="${selectedPosition == 'DST'}" style="padding:10px 8px; text-align:right; color:var(--muted);" th:attr="data-v=${s.ptsAllowed ?: 0}"
+                    th:text="${s.ptsAllowed != null ? s.ptsAllowed : '—'}">—</td>
             </tr>
             <tr th:if="${#lists.isEmpty(stats)}">
                 <td colspan="9" style="padding:20px; text-align:center; color:var(--muted);">No rankings found.</td>
@@ -136,12 +222,53 @@
 </footer>
 
 <script>
-    function filterTable(query) {
-        const q = query.toLowerCase();
+    let searchQuery = '';
+    let activeTeam = 'ALL';
+
+    function applyFilters() {
         document.querySelectorAll('#rankingsBody tr[data-name]').forEach(row => {
-            row.style.display = row.dataset.name.toLowerCase().includes(q) ? '' : 'none';
+            const nameMatch = row.dataset.name.toLowerCase().includes(searchQuery);
+            const teamMatch = activeTeam === 'ALL' || row.dataset.team === activeTeam;
+            row.style.display = (nameMatch && teamMatch) ? '' : 'none';
         });
     }
+
+    function filterTable(query) {
+        searchQuery = query.toLowerCase();
+        applyFilters();
+    }
+
+    function filterTeam(team) {
+        activeTeam = team;
+        applyFilters();
+    }
+
+    // Click a column header to sort by it (numeric columns use the data-v attribute; text columns use cell text).
+    document.querySelectorAll('thead th[data-sort]').forEach(th => {
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', () => {
+            const type = th.dataset.sort;
+            const colIndex = Array.from(th.parentNode.children).indexOf(th);
+            const tbody = document.getElementById('rankingsBody');
+            const asc = th.dataset.dir !== 'asc';
+            document.querySelectorAll('thead th[data-sort]').forEach(h => h.dataset.dir = '');
+            th.dataset.dir = asc ? 'asc' : 'desc';
+
+            const rows = Array.from(tbody.querySelectorAll('tr[data-name]'));
+            rows.sort((a, b) => {
+                const cellA = a.children[colIndex], cellB = b.children[colIndex];
+                if (type === 'num') {
+                    const av = parseFloat(cellA.dataset.v ?? cellA.textContent) || -Infinity;
+                    const bv = parseFloat(cellB.dataset.v ?? cellB.textContent) || -Infinity;
+                    return asc ? av - bv : bv - av;
+                }
+                const av = cellA.textContent.trim().toLowerCase();
+                const bv = cellB.textContent.trim().toLowerCase();
+                return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+            });
+            rows.forEach(r => tbody.appendChild(r));
+        });
+    });
 </script>
 </body>
 </html>

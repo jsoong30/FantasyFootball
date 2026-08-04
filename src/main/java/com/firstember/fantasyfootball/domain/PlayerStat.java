@@ -39,6 +39,12 @@ public class PlayerStat {
 
     @Column(name = "reception_pct") private Double receptionPct;
 
+    // Usage — summed offensive snaps this player played, and the team's total offensive snaps,
+    // across all weeks played this season. snap_pct = offSnaps / teamOffSnaps is computed on the
+    // fly (see AdminController.exportCsv / MlPredictionService.statToPayload), same as reception_pct.
+    @Column(name = "off_snaps")      private Integer offSnaps;
+    @Column(name = "team_off_snaps") private Integer teamOffSnaps;
+
     // Kicker
     @Column(name = "pat_made")      private Integer patMade;
     @Column(name = "pat_missed")    private Integer patMissed;
@@ -120,6 +126,12 @@ public class PlayerStat {
 
     public Double getReceptionPct() { return receptionPct; }
     public void setReceptionPct(Double receptionPct) { this.receptionPct = receptionPct; }
+
+    public Integer getOffSnaps() { return offSnaps; }
+    public void setOffSnaps(Integer offSnaps) { this.offSnaps = offSnaps; }
+
+    public Integer getTeamOffSnaps() { return teamOffSnaps; }
+    public void setTeamOffSnaps(Integer teamOffSnaps) { this.teamOffSnaps = teamOffSnaps; }
 
     public Integer getPatMade() { return patMade; }
     public void setPatMade(Integer patMade) { this.patMade = patMade; }

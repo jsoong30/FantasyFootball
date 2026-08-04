@@ -37,6 +37,10 @@ public class PlayerWeeklyStat {
     private Integer targets;
     private Integer fumbles;
 
+    // Usage — offensive snaps this player played, and the team's total offensive snaps that week
+    @Column(name = "off_snaps")      private Integer offSnaps;
+    @Column(name = "team_off_snaps") private Integer teamOffSnaps;
+
     // Kicker
     @Column(name = "pat_made")      private Integer patMade;
     @Column(name = "pat_missed")    private Integer patMissed;
@@ -102,6 +106,12 @@ public class PlayerWeeklyStat {
 
     public Integer getFumbles()                     { return fumbles; }
     public void setFumbles(Integer fumbles)         { this.fumbles = fumbles; }
+
+    public Integer getOffSnaps()                    { return offSnaps; }
+    public void setOffSnaps(Integer offSnaps)       { this.offSnaps = offSnaps; }
+
+    public Integer getTeamOffSnaps()                { return teamOffSnaps; }
+    public void setTeamOffSnaps(Integer teamOffSnaps) { this.teamOffSnaps = teamOffSnaps; }
 
     public Integer getPatMade()                     { return patMade; }
     public void setPatMade(Integer patMade)         { this.patMade = patMade; }

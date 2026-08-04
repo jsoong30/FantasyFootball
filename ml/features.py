@@ -6,6 +6,7 @@ Season CSV column contract (from /admin/export):
   passing_yds, passing_td, passing_int,
   rushing_yds, rushing_td,
   targets, receiving_rec, receiving_yds, receiving_td, reception_pct, fumbles,
+  off_snaps, team_off_snaps, snap_pct,
   pat_made, pat_missed, fg_made,
   def_sacks, def_ints, def_fum_rec, def_td, def_safeties, def_blocked_kicks,
   pts_allowed, yds_allowed
@@ -28,6 +29,7 @@ POSITION_FEATURES: dict[str, list[str]] = {
         "age", "age_sq", "games_played", "total_points", "points_per_game",
         "passing_yds", "passing_td", "passing_int",
         "rushing_yds", "rushing_td",
+        "snap_pct",
         "prev2_total_points", "prev2_points_per_game", "pts_delta", "has_prev2",
         "weekly_pts_std", "floor", "ceiling", "games_over_10", "games_over_20",
         "opp_pts_allowed",
@@ -36,6 +38,7 @@ POSITION_FEATURES: dict[str, list[str]] = {
         "age", "age_sq", "games_played", "total_points", "points_per_game",
         "rushing_yds", "rushing_td",
         "targets", "receiving_rec", "receiving_yds", "receiving_td", "reception_pct",
+        "snap_pct",
         "prev2_total_points", "prev2_points_per_game", "pts_delta", "has_prev2",
         "weekly_pts_std", "floor", "ceiling", "games_over_10", "games_over_20",
         "opp_pts_allowed",
@@ -43,6 +46,7 @@ POSITION_FEATURES: dict[str, list[str]] = {
     "WR": [
         "age", "age_sq", "games_played", "total_points", "points_per_game",
         "targets", "receiving_rec", "receiving_yds", "receiving_td", "reception_pct",
+        "snap_pct",
         "prev2_total_points", "prev2_points_per_game", "pts_delta", "has_prev2",
         "weekly_pts_std", "floor", "ceiling", "games_over_10", "games_over_20",
         "opp_pts_allowed",
@@ -50,6 +54,7 @@ POSITION_FEATURES: dict[str, list[str]] = {
     "TE": [
         "age", "age_sq", "games_played", "total_points", "points_per_game",
         "targets", "receiving_rec", "receiving_yds", "receiving_td", "reception_pct",
+        "snap_pct",
         "prev2_total_points", "prev2_points_per_game", "pts_delta", "has_prev2",
         "weekly_pts_std", "floor", "ceiling", "games_over_10", "games_over_20",
         "opp_pts_allowed",

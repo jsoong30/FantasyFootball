@@ -38,6 +38,17 @@ public interface PlayerWeeklyStatRepository extends JpaRepository<PlayerWeeklySt
     /** All weekly stats for a specific season and week — used to backfill opponent_code. */
     List<PlayerWeeklyStat> findBySeasonAndWeek(Integer season, Integer week);
 
+    /** Weekly stats for a specific season and week, highest scorers first — used by the Stats page. */
+    List<PlayerWeeklyStat> findBySeasonAndWeekOrderByTotalPointsDesc(Integer season, Integer week);
+
+    /** Distinct seasons that have weekly data, most recent first — used to populate the Stats page selector. */
+    @Query("SELECT DISTINCT w.season FROM PlayerWeeklyStat w ORDER BY w.season DESC")
+    List<Integer> findDistinctSeasons();
+
+    /** Distinct weeks with data for a season, most recent first — used to populate the Stats page selector. */
+    @Query("SELECT DISTINCT w.week FROM PlayerWeeklyStat w WHERE w.season = :season ORDER BY w.week DESC")
+    List<Integer> findDistinctWeeksBySeason(@org.springframework.data.repository.query.Param("season") Integer season);
+
     /**
      * Returns [player_id, opponent_code, total_points, position] for a season — used to compute
      * schedule strength (opponent defensive rating) before calling the ML API.

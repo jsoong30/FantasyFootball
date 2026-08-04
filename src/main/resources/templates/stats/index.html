@@ -20,6 +20,7 @@
             <a th:href="@{/players}">Players</a>
             <a th:href="@{/teams}">Teams</a>
             <a th:href="@{/stats}" aria-current="page">Stats</a>
+            <a th:href="@{/rankings}">Rankings</a>
             <a th:href="@{/predictions}">Predictions</a>
             <a th:href="@{/model}">Model</a>
             <a th:href="@{/players}" class="btn primary" style="margin-left:20px;padding:7px 16px;font-size:13px;">Get Started</a>
@@ -29,18 +30,145 @@
 
 <main class="container" style="padding:24px 0;">
     <h1 style="margin:0 0 6px;">Weekly Stats</h1>
-    <p class="muted" style="margin:0 0 40px;">2026 Season</p>
+    <p class="muted" style="margin:0 0 16px;" th:text="${selectedYear} + ' Season'">2026 Season</p>
 
-    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 0; text-align:center;">
+    <div th:if="${!availableYears.isEmpty()}" style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center;">
+            <span style="font-size:13px; color:var(--muted);">Season:</span>
+            <a th:each="y : ${availableYears}"
+               th:href="@{/stats(year=${y})}"
+               th:classappend="${selectedYear == y} ? ' primary' : ''"
+               th:text="${y}"
+               class="btn"
+               style="padding:5px 14px; font-size:13px;">2026</a>
+        </div>
+        <div th:if="${!availableWeeks.isEmpty()}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <span style="font-size:13px; color:var(--muted);">Week:</span>
+            <a th:each="w : ${availableWeeks}"
+               th:href="@{/stats(year=${selectedYear},week=${w})}"
+               th:classappend="${selectedWeek == w} ? ' primary' : ''"
+               th:text="${w}"
+               class="btn"
+               style="padding:5px 12px; font-size:13px;">1</a>
+        </div>
+    </div>
+
+    <div th:if="${weeklyStats.isEmpty()}"
+         style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 0; text-align:center;">
         <div style="font-size:64px; margin-bottom:24px;">🏈</div>
-        <h2 style="margin:0 0 12px; font-size:1.6rem;">Season Has Not Started Yet</h2>
+        <h2 style="margin:0 0 12px; font-size:1.6rem;">No Stats Yet</h2>
         <p class="muted" style="max-width:420px; margin:0 0 32px; line-height:1.6;">
-            Weekly stats will be available once the 2026 NFL season kicks off.
-            Check back here each week for updated scores and performance breakdowns.
+            Weekly stats will show up here once the season kicks off and a sync has been run.
+            Check back after the next round of games.
         </p>
         <div style="display:flex; gap:12px;">
             <a th:href="@{/players}" class="btn primary">View Players</a>
             <a th:href="@{/teams}" class="btn">View Teams</a>
+        </div>
+    </div>
+
+    <div th:if="${!weeklyStats.isEmpty()}">
+        <!-- Position filter -->
+        <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="pos-btn btn primary" data-pos="ALL" onclick="filterPos(this)">All</button>
+            <button class="pos-btn btn" data-pos="QB"  onclick="filterPos(this)">QB</button>
+            <button class="pos-btn btn" data-pos="RB"  onclick="filterPos(this)">RB</button>
+            <button class="pos-btn btn" data-pos="WR"  onclick="filterPos(this)">WR</button>
+            <button class="pos-btn btn" data-pos="TE"  onclick="filterPos(this)">TE</button>
+            <button class="pos-btn btn" data-pos="K"   onclick="filterPos(this)">K</button>
+            <button class="pos-btn btn" data-pos="DST" onclick="filterPos(this)">DST</button>
+        </div>
+
+        <!-- Search + team filter -->
+        <div style="margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+            <input id="searchInput" type="text" placeholder="Search player name..."
+                   oninput="filterSearch(this.value)"
+                   style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                          background:var(--panel); color:var(--text); font-size:14px; width:260px;">
+            <select id="teamFilter" onchange="filterTeam(this.value)"
+                    style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                           background:var(--panel); color:var(--text); font-size:14px;">
+                <option value="ALL">All Teams</option>
+                <option th:each="t : ${#sets.toSet(weeklyStats.![player.team?.code])}"
+                        th:if="${t != null}" th:value="${t}" th:text="${t}">KC</option>
+            </select>
+        </div>
+
+        <div class="card" style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; min-width:500px;">
+                <thead>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <th data-sort="text" style="text-align:left; padding:8px 6px;">Name</th>
+                    <th class="col-pos" data-sort="text" style="text-align:left; padding:8px 6px;">Pos</th>
+                    <th data-sort="text" style="text-align:left; padding:8px 6px;">Team</th>
+                    <th data-sort="text" style="text-align:left; padding:8px 6px;">Opp</th>
+                    <th data-sort="num" style="text-align:right; padding:8px 6px;">Pts</th>
+                    <th class="col-passing" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Pass Yds</th>
+                    <th class="col-passing" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Pass TD</th>
+                    <th class="col-passing" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">INT</th>
+                    <th class="col-rushing" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Rush Yds</th>
+                    <th class="col-rushing" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Rush TD</th>
+                    <th class="col-receiving" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Targets</th>
+                    <th class="col-receiving" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Rec</th>
+                    <th class="col-receiving" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Rec Yds</th>
+                    <th class="col-receiving" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Rec TD</th>
+                    <th class="col-kicking" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">PAT Made</th>
+                    <th class="col-kicking" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">FG Made</th>
+                    <th class="col-defense" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Sacks</th>
+                    <th class="col-defense" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Def INT</th>
+                    <th class="col-defense" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Def TD</th>
+                    <th class="col-defense" data-sort="num" style="text-align:right; padding:8px 6px; display:none;">Pts Allowed</th>
+                </tr>
+                </thead>
+                <tbody id="statsRows">
+                <tr th:each="w : ${weeklyStats}" data-row
+                    th:attr="data-position=${w.player.position},data-name=${w.player.fullName},data-team=${w.player.team != null ? w.player.team.code : ''}"
+                    style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px; font-weight:600;">
+                        <a th:href="@{/players/{id}(id=${w.player.id})}"
+                           style="color:var(--text); text-decoration:none;"
+                           th:text="${w.player.fullName}">Player Name</a>
+                    </td>
+                    <td class="col-pos" style="padding:8px 6px;">
+                        <span th:text="${w.player.position}" style="font-weight:700; color:var(--brand);">QB</span>
+                    </td>
+                    <td style="padding:8px 6px;" th:text="${w.player.team != null ? w.player.team.code : '—'}">KC</td>
+                    <td style="padding:8px 6px; color:var(--muted);" th:text="${w.opponentCode != null ? w.opponentCode : '—'}">—</td>
+                    <td style="padding:8px 6px; text-align:right; font-weight:600;" th:attr="data-v=${w.totalPoints ?: 0}"
+                        th:text="${w.totalPoints != null ? #numbers.formatDecimal(w.totalPoints,1,2) : '—'}">—</td>
+                    <td class="col-passing" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.passingYds ?: 0}"
+                        th:text="${w.passingYds != null ? w.passingYds : '—'}">—</td>
+                    <td class="col-passing" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.passingTd ?: 0}"
+                        th:text="${w.passingTd != null ? w.passingTd : '—'}">—</td>
+                    <td class="col-passing" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.passingInt ?: 0}"
+                        th:text="${w.passingInt != null ? w.passingInt : '—'}">—</td>
+                    <td class="col-rushing" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.rushingYds ?: 0}"
+                        th:text="${w.rushingYds != null ? w.rushingYds : '—'}">—</td>
+                    <td class="col-rushing" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.rushingTd ?: 0}"
+                        th:text="${w.rushingTd != null ? w.rushingTd : '—'}">—</td>
+                    <td class="col-receiving" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.targets ?: 0}"
+                        th:text="${w.targets != null ? w.targets : '—'}">—</td>
+                    <td class="col-receiving" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.receivingRec ?: 0}"
+                        th:text="${w.receivingRec != null ? w.receivingRec : '—'}">—</td>
+                    <td class="col-receiving" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.receivingYds ?: 0}"
+                        th:text="${w.receivingYds != null ? w.receivingYds : '—'}">—</td>
+                    <td class="col-receiving" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.receivingTd ?: 0}"
+                        th:text="${w.receivingTd != null ? w.receivingTd : '—'}">—</td>
+                    <td class="col-kicking" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.patMade ?: 0}"
+                        th:text="${w.patMade != null ? w.patMade : '—'}">—</td>
+                    <td class="col-kicking" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.fgMade ?: 0}"
+                        th:text="${w.fgMade != null ? w.fgMade : '—'}">—</td>
+                    <td class="col-defense" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.defSacks ?: 0}"
+                        th:text="${w.defSacks != null ? w.defSacks : '—'}">—</td>
+                    <td class="col-defense" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.defInts ?: 0}"
+                        th:text="${w.defInts != null ? w.defInts : '—'}">—</td>
+                    <td class="col-defense" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.defTd ?: 0}"
+                        th:text="${w.defTd != null ? w.defTd : '—'}">—</td>
+                    <td class="col-defense" style="padding:8px 6px; text-align:right; display:none;" th:attr="data-v=${w.ptsAllowed ?: 0}"
+                        th:text="${w.ptsAllowed != null ? w.ptsAllowed : '—'}">—</td>
+                </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </main>
@@ -51,5 +179,84 @@
         <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
     </div>
 </footer>
+
+<script>
+    const colGroups = {
+        'ALL': { pos:true,  passing:false, rushing:false, receiving:false, kicking:false, defense:false },
+        'QB':  { pos:false, passing:true,  rushing:true,  receiving:false, kicking:false, defense:false },
+        'RB':  { pos:false, passing:false, rushing:true,  receiving:true,  kicking:false, defense:false },
+        'WR':  { pos:false, passing:false, rushing:false, receiving:true,  kicking:false, defense:false },
+        'TE':  { pos:false, passing:false, rushing:false, receiving:true,  kicking:false, defense:false },
+        'K':   { pos:false, passing:false, rushing:false, receiving:false, kicking:true,  defense:false },
+        'DST': { pos:false, passing:false, rushing:false, receiving:false, kicking:false, defense:true  },
+    };
+    function setCols(group, visible) {
+        document.querySelectorAll('.' + group).forEach(el => el.style.display = visible ? '' : 'none');
+    }
+
+    let activePos = 'ALL';
+    let searchQuery = '';
+    let activeTeam = 'ALL';
+
+    function applyFilters() {
+        document.querySelectorAll('#statsRows tr[data-row]').forEach(row => {
+            const posMatch = activePos === 'ALL' || row.dataset.position === activePos;
+            const teamMatch = activeTeam === 'ALL' || row.dataset.team === activeTeam;
+            const nameMatch = row.dataset.name ? row.dataset.name.toLowerCase().includes(searchQuery) : true;
+            row.style.display = (posMatch && teamMatch && nameMatch) ? '' : 'none';
+        });
+    }
+
+    function filterPos(btn) {
+        document.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('primary'));
+        btn.classList.add('primary');
+        activePos = btn.dataset.pos;
+        const cols = colGroups[activePos] || colGroups['ALL'];
+        setCols('col-pos',       cols.pos);
+        setCols('col-passing',   cols.passing);
+        setCols('col-rushing',   cols.rushing);
+        setCols('col-receiving', cols.receiving);
+        setCols('col-kicking',   cols.kicking);
+        setCols('col-defense',   cols.defense);
+        applyFilters();
+    }
+
+    function filterSearch(query) {
+        searchQuery = query.toLowerCase();
+        applyFilters();
+    }
+
+    function filterTeam(team) {
+        activeTeam = team;
+        applyFilters();
+    }
+
+    // Click a column header to sort by it (numeric columns use the data-v attribute; text columns use cell text).
+    document.querySelectorAll('thead th[data-sort]').forEach(th => {
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', () => {
+            const type = th.dataset.sort;
+            const colIndex = Array.from(th.parentNode.children).indexOf(th);
+            const tbody = document.getElementById('statsRows');
+            const asc = th.dataset.dir !== 'asc';
+            document.querySelectorAll('thead th[data-sort]').forEach(h => h.dataset.dir = '');
+            th.dataset.dir = asc ? 'asc' : 'desc';
+
+            const rows = Array.from(tbody.querySelectorAll('tr[data-row]'));
+            rows.sort((a, b) => {
+                const cellA = a.children[colIndex], cellB = b.children[colIndex];
+                if (type === 'num') {
+                    const av = parseFloat(cellA.dataset.v ?? cellA.textContent) || -Infinity;
+                    const bv = parseFloat(cellB.dataset.v ?? cellB.textContent) || -Infinity;
+                    return asc ? av - bv : bv - av;
+                }
+                const av = cellA.textContent.trim().toLowerCase();
+                const bv = cellB.textContent.trim().toLowerCase();
+                return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+            });
+            rows.forEach(r => tbody.appendChild(r));
+        });
+    });
+</script>
 </body>
 </html>

@@ -18,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.MonthDay;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -141,6 +144,87 @@ public class SleeperService {
         return String.format(
                 "Season %d sync complete — %d players created, %d updated, %d weekly records saved, %d ranked.",
                 year, created, updated, weeklySaved, ranked);
+    }
+
+    /**
+     * Sync a single week of stats instead of the full season — used for in-season weekly refreshes
+     * and for testing against preseason data (Sleeper exposes the same endpoint shape for
+     * {@code seasonType} "pre", "regular", and "post").
+     * <p>
+     * Preseason stats are intentionally not persisted (they'd collide on the (player, season, week)
+     * unique constraint with the eventual regular-season week 1/2/3 data, and aren't fantasy-relevant
+     * anyway) — a "pre" sync is a dry run that reports what Sleeper returned without writing to the DB,
+     * so it can still validate the fetch/parse/player-matching path ahead of the real season.
+     */
+    @Transactional(timeout = 120)
+    public String syncWeek(int year, int week, String seasonType) {
+        log.info("=== Sleeper single-week sync — {} {}/week {} ===", seasonType, year, week);
+        boolean persist = "regular".equalsIgnoreCase(seasonType);
+
+        Map<String, Map<String, Object>> weekData;
+        String url = BASE + "/stats/nfl/" + seasonType + "/" + year + "/" + week;
+        try {
+            weekData = restTemplate.exchange(url, HttpMethod.GET, null,
+                            new ParameterizedTypeReference<Map<String, Map<String, Object>>>() {})
+                    .getBody();
+        } catch (Exception e) {
+            return String.format("Sync failed — could not reach Sleeper for %s %d week %d: %s",
+                    seasonType, year, week, e.getMessage());
+        }
+        if (weekData == null || weekData.isEmpty()) {
+            return String.format("No stats available yet for %s season %d week %d.", seasonType, year, week);
+        }
+
+        Map<String, SleeperPlayerDTO> sleeperPlayers = fetchAllPlayers();
+        Map<String, Team> teamByCode = new HashMap<>();
+        teamRepository.findAll().forEach(t -> teamByCode.put(t.getCode(), t));
+        Map<String, String> scheduleMap = persist ? fetchEspnScheduleForWeek(year, week) : Map.of();
+
+        int matched = 0, saved = 0, skipped = 0;
+        List<String> preview = new ArrayList<>();
+
+        for (Map.Entry<String, Map<String, Object>> entry : weekData.entrySet()) {
+            String sleeperId = entry.getKey();
+            Map<String, Object> raw = entry.getValue();
+            double pts = asDouble(raw, "pts_ppr");
+            if (pts == 0) continue;
+
+            SleeperPlayerDTO dto = sleeperPlayers.get(sleeperId);
+            if (dto == null || dto.getPosition() == null || !KEEP_POSITIONS.contains(dto.getPosition())) {
+                skipped++;
+                continue;
+            }
+            matched++;
+
+            if (persist) {
+                try {
+                    Player player = upsertPlayer(dto, sleeperId, year, teamByCode);
+                    String teamCode = player.getTeam() != null ? player.getTeam().getCode() : null;
+                    String opponentCode = teamCode != null ? scheduleMap.get(teamCode) : null;
+
+                    PlayerWeeklyStat w = weeklyStatRepository
+                            .findByPlayer_IdAndSeasonAndWeek(player.getId(), year, week)
+                            .orElse(new PlayerWeeklyStat());
+                    populateWeeklyStat(w, player, year, week, raw, opponentCode);
+                    weeklyStatRepository.save(w);
+                    saved++;
+                } catch (Exception e) {
+                    log.warn("Skipping player {} during week sync: {}", sleeperId, e.getMessage());
+                    skipped++;
+                }
+            } else if (preview.size() < 10) {
+                String position = "DEF".equals(dto.getPosition()) ? "DST" : dto.getPosition();
+                preview.add(String.format("%s (%s, %s) — %.1f pts", dto.getFullName(), position, dto.getTeam(), pts));
+            }
+        }
+
+        if (!persist) {
+            return String.format(
+                    "Dry run — %s season %d week %d: %d players with stats found, not saved (preseason isn't persisted). Sample: %s",
+                    seasonType, year, week, matched, preview.isEmpty() ? "none" : String.join("; ", preview));
+        }
+
+        return String.format("Week %d (%d) sync complete — %d players updated, %d skipped.", week, year, saved, skipped);
     }
 
     // ── Opponent backfill ─────────────────────────────────────────────────────
@@ -280,38 +364,9 @@ public class SleeperService {
 
                 // Opponent code: look up who the player's team faced this week
                 String teamCode = player.getTeam() != null ? player.getTeam().getCode() : null;
-                if (teamCode != null) {
-                    w.setOpponentCode(scheduleMap.get(teamCode));
-                }
+                String opponentCode = teamCode != null ? scheduleMap.get(teamCode) : null;
 
-                w.setPlayer(player);
-                w.setSeason(year);
-                w.setWeek(week);
-                w.setTotalPoints(roundTo2(pts));
-                w.setPassingYds(asNullableInt(raw, "pass_yd"));
-                w.setPassingTd(asNullableInt(raw, "pass_td"));
-                w.setPassingInt(asNullableInt(raw, "pass_int"));
-                w.setRushingYds(asNullableInt(raw, "rush_yd"));
-                w.setRushingTd(asNullableInt(raw, "rush_td"));
-                w.setReceivingRec(asNullableInt(raw, "rec"));
-                w.setReceivingYds(asNullableInt(raw, "rec_yd"));
-                w.setReceivingTd(asNullableInt(raw, "rec_td"));
-                w.setTargets(asNullableInt(raw, "rec_tgt"));
-                w.setFumbles(asNullableInt(raw, "fum_lost"));
-                w.setPatMade(asNullableInt(raw, "xpm"));
-                w.setPatMissed(asNullableInt(raw, "xpmiss"));
-                int fgMade = asInt(raw, "fgm_0_19") + asInt(raw, "fgm_20_29")
-                           + asInt(raw, "fgm_30_39") + asInt(raw, "fgm_40_49")
-                           + asInt(raw, "fgm_50p");
-                w.setFgMade(fgMade > 0 ? fgMade : null);
-                w.setDefSacks(asNullableInt(raw, "sack"));
-                w.setDefInts(asNullableInt(raw, "int"));
-                w.setDefFumRecoveries(asNullableInt(raw, "fum_rec"));
-                w.setDefTd(asNullableInt(raw, "def_td"));
-                w.setDefSafeties(asNullableInt(raw, "safe"));
-                w.setDefBlockedKicks(asNullableInt(raw, "blk_kick"));
-                w.setPtsAllowed(asNullableInt(raw, "pts_allow"));
-
+                populateWeeklyStat(w, player, year, week, raw, opponentCode);
                 toSave.add(w);
             }
 
@@ -319,6 +374,42 @@ public class SleeperService {
             count += toSave.size();
         }
         return count;
+    }
+
+    /** Populates a single PlayerWeeklyStat from a raw Sleeper stat map. Shared by full-season and single-week sync. */
+    private PlayerWeeklyStat populateWeeklyStat(PlayerWeeklyStat w, Player player, int year, int week,
+                                                Map<String, Object> raw, String opponentCode) {
+        w.setPlayer(player);
+        w.setSeason(year);
+        w.setWeek(week);
+        w.setOpponentCode(opponentCode);
+        w.setTotalPoints(roundTo2(asDouble(raw, "pts_ppr")));
+        w.setPassingYds(asNullableInt(raw, "pass_yd"));
+        w.setPassingTd(asNullableInt(raw, "pass_td"));
+        w.setPassingInt(asNullableInt(raw, "pass_int"));
+        w.setRushingYds(asNullableInt(raw, "rush_yd"));
+        w.setRushingTd(asNullableInt(raw, "rush_td"));
+        w.setReceivingRec(asNullableInt(raw, "rec"));
+        w.setReceivingYds(asNullableInt(raw, "rec_yd"));
+        w.setReceivingTd(asNullableInt(raw, "rec_td"));
+        w.setTargets(asNullableInt(raw, "rec_tgt"));
+        w.setFumbles(asNullableInt(raw, "fum_lost"));
+        w.setOffSnaps(asNullableInt(raw, "off_snp"));
+        w.setTeamOffSnaps(asNullableInt(raw, "tm_off_snp"));
+        w.setPatMade(asNullableInt(raw, "xpm"));
+        w.setPatMissed(asNullableInt(raw, "xpmiss"));
+        int fgMade = asInt(raw, "fgm_0_19") + asInt(raw, "fgm_20_29")
+                   + asInt(raw, "fgm_30_39") + asInt(raw, "fgm_40_49")
+                   + asInt(raw, "fgm_50p");
+        w.setFgMade(fgMade > 0 ? fgMade : null);
+        w.setDefSacks(asNullableInt(raw, "sack"));
+        w.setDefInts(asNullableInt(raw, "int"));
+        w.setDefFumRecoveries(asNullableInt(raw, "fum_rec"));
+        w.setDefTd(asNullableInt(raw, "def_td"));
+        w.setDefSafeties(asNullableInt(raw, "safe"));
+        w.setDefBlockedKicks(asNullableInt(raw, "blk_kick"));
+        w.setPtsAllowed(asNullableInt(raw, "pts_allow"));
+        return w;
     }
 
     /**
@@ -410,10 +501,38 @@ public class SleeperService {
         player.setPosition(position);
         player.setTeam(team);
         player.setSeason(year);
-        player.setAge(dto.getAge());
+
+        LocalDate birthDate = parseBirthDate(dto.getBirthDate());
+        player.setBirthDate(birthDate);
+        player.setAge(ageForSeason(birthDate, year, dto.getAge()));
         player.setStatus(dto.getStatus());
 
         return playerRepository.save(player);
+    }
+
+    private static final MonthDay SEASON_AGE_REFERENCE = MonthDay.of(9, 1); // "age entering the season"
+
+    private LocalDate parseBirthDate(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return LocalDate.parse(raw);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Age as of September 1 of {@code season}, computed from birth date so re-syncing an old
+     * season doesn't stamp the player's *current* age onto that historical row (Sleeper's
+     * /players/nfl feed only ever reports today's age — see Player.age javadoc).
+     * Falls back to Sleeper's live age when birth date is unavailable (e.g. team DST entries).
+     */
+    private Integer ageForSeason(LocalDate birthDate, int season, Integer fallbackCurrentAge) {
+        if (birthDate == null) return fallbackCurrentAge;
+        LocalDate reference = LocalDate.of(season, SEASON_AGE_REFERENCE.getMonthValue(), SEASON_AGE_REFERENCE.getDayOfMonth());
+        int age = reference.getYear() - birthDate.getYear();
+        if (MonthDay.from(birthDate).isAfter(SEASON_AGE_REFERENCE)) age--;
+        return age;
     }
 
     private boolean upsertStat(Player player, SleeperStatsDTO dto, int year) {
@@ -434,6 +553,8 @@ public class SleeperService {
         stat.setReceivingTd(nullIfZero(dto.getReceivingTd()));
         stat.setTargets(nullIfZero(dto.getTargets()));
         stat.setFumbles(nullIfZero(dto.getFumbles()));
+        stat.setOffSnaps(nullIfZero(dto.getOffSnaps()));
+        stat.setTeamOffSnaps(nullIfZero(dto.getTeamOffSnaps()));
         stat.setPatMade(nullIfZero(dto.getPatMade()));
         stat.setPatMissed(nullIfZero(dto.getPatMissed()));
         stat.setFgMade0_19(nullIfZero(dto.getFgMade0_19()));

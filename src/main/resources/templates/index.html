@@ -14,12 +14,14 @@
             <span style="font-size:22px;">🏈</span>
             <div>
                 <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
-                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;">2024 NFL · AI Predictions Coming</div>
+                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;"
+                     th:text="${modelConnected} ? '2025 NFL · AI Predictions Live' : '2024 NFL · AI Predictions Coming'">2024 NFL · AI Predictions Coming</div>
             </div>
         </div>
         <nav class="nav">
             <a th:href="@{/players}">Players</a>
             <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/stats}">Stats</a>
             <a th:href="@{/rankings}">Rankings</a>
             <a th:href="@{/predictions}">Predictions</a>
             <a th:href="@{/model}">Model</a>
@@ -86,9 +88,12 @@
 <section class="container ai-section">
     <div class="ai-card">
         <div class="ai-left">
-            <div class="ai-badge">Coming Soon</div>
+            <div class="ai-badge" th:text="${modelConnected} ? 'Live' : 'Coming Soon'">Coming Soon</div>
             <h2 class="ai-headline">AI-Powered<br>Player Predictions</h2>
-            <p class="ai-sub">A custom machine learning model — trained on real NFL data — will predict player fantasy point totals for the upcoming season. No guesswork. Just data.</p>
+            <p class="ai-sub"
+               th:text="${modelConnected}
+                   ? 'A custom machine learning model — trained on real NFL data — predicts player fantasy point totals for the upcoming season. No guesswork. Just data.'
+                   : 'A custom machine learning model — trained on real NFL data — will predict player fantasy point totals for the upcoming season. No guesswork. Just data.'">A custom machine learning model — trained on real NFL data — will predict player fantasy point totals for the upcoming season. No guesswork. Just data.</p>
             <div class="ai-features">
                 <div class="ai-feature">
                     <span class="ai-feature-icon">🎯</span>

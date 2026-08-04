@@ -13,6 +13,7 @@ public class SleeperPlayerDTO {
     @JsonProperty("position")    private String position;
     @JsonProperty("team")        private String team;
     @JsonProperty("age")         private Integer age;
+    @JsonProperty("birth_date")  private String birthDate;
     @JsonProperty("status")      private String status;
     @JsonProperty("depth_chart_order") private Integer depthChartOrder;
     @JsonProperty("years_exp")   private Integer yearsExp;
@@ -24,6 +25,7 @@ public class SleeperPlayerDTO {
     public String getPosition()          { return position; }
     public String getTeam()              { return team; }
     public Integer getAge()              { return age; }
+    public String getBirthDate()         { return birthDate; }
     public String getStatus()            { return status; }
     public Integer getDepthChartOrder()  { return depthChartOrder; }
     public Integer getYearsExp()         { return yearsExp; }

@@ -12,7 +12,7 @@ A full-stack Fantasy Football web app with an AI prediction layer.
 - **Web app**: Spring Boot 3.5 + Thymeleaf, running on `localhost:8080`
 - **Database**: PostgreSQL 16 via Docker, port `5433`, database `fantasydb`
 - **ML pipeline**: Python (scikit-learn + FastAPI), running on `localhost:8000`
-- **Data source**: [Sleeper API](https://docs.sleeper.com/) — free, no API key required
+- **Data source**: [Sleeper API](https://docs.sleeper.com/) — free, no API key requireds
 
 The app shows NFL player stats (2020–2025), ranks players by PPR fantasy points, and uses a
 trained GradientBoosting model to project next-season fantasy points.
@@ -195,18 +195,20 @@ Algorithm: `GradientBoostingRegressor(n_estimators=200, max_depth=3, learning_ra
 | `ceiling` | Mean of top 4 weekly scores |
 | `games_over_10`, `games_over_20` | Consistency thresholds |
 | `opp_pts_allowed` | Avg pts opponents allowed to this position per game (schedule strength) |
+| `snap_pct` | % of team's offensive snaps played (season avg); QB/RB/WR/TE only, not K/DST |
 
 ### Key guardrails in `serve.py`
 1. **Rookie blending**: First-year players (`has_prev2=0`) get 55% model prediction + 45% position mean (prevents runaway extrapolation from a single season)
 2. **Improvement cap**: Max projection = 1.40× prior season total (prevents extreme outliers)
+3. **Status discount**: Players whose *current* Sleeper roster status is Injured Reserve/PUP/Suspended/Inactive get a modest projection haircut (`STATUS_DISCOUNTS` in serve.py). `status` is never a trained feature — see the gotcha below for why.
 
 ### Evaluation
 `py train.py eval` — runs walk-forward cross-validation (trains on past seasons, tests on future).
 This is the honest accuracy estimate; do NOT use random k-fold (it leaks future data).
 
-Walk-forward MAE results (as of last evaluation with 2020–2025 data):
-- QB: ~88.5 pts | RB: ~60.1 | WR: ~49.8 | TE: ~36.7 | K: ~34.9 | DST: ~28.5
-- Overall average: ~49.7 pts
+Walk-forward MAE results (as of last evaluation with 2020–2025 data, incl. snap_pct feature):
+- QB: ~84.5 pts | RB: ~56.8 | WR: ~47.8 | TE: ~35.5 | K: ~32.5 | DST: ~28.5
+- Overall average: ~47.6 pts
 
 ---
 
@@ -248,6 +250,7 @@ Update these constants when a new season starts.
 - **`games_played` in ML payload**: Comes from counting `PlayerWeeklyStat` rows, not stored in `PlayerStat`. If `countWeeksByPlayerForSeason` returns 0, points_per_game defaults to total_points (a bug symptom, not a bug itself).
 - **Maven incremental compile**: After editing Java files on Windows, run with `-Dmaven.compiler.useIncrementalCompilation=false` if changes aren't picked up. Or `touch` the source files.
 - **Unicode in Python on Windows**: Use ASCII characters in print statements in train.py. `→` (U+2192) causes `UnicodeEncodeError` on Windows cmd with cp1252 encoding.
+- **Sleeper's `/players/nfl` is a live snapshot, not history**: `age` and `status` both come from this endpoint, which only ever returns *today's* values — there is no season-specific age/status in Sleeper's data. `SleeperService.upsertPlayer()` now derives `age` from the player's stored `birth_date` as-of Sept 1 of the season being synced (`ageForSeason()`), so re-syncing an old season no longer stamps today's age onto that historical row. `status` has no historical equivalent at all, so it is intentionally **not** a trained feature — it's only used as a prediction-time guardrail (discount for currently-injured/inactive players). Existing rows synced before this fix have `birth_date = NULL` and a stale `age` until re-synced.
 
 ---
 

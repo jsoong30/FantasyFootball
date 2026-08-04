@@ -24,6 +24,17 @@ from features import POSITIONS, add_computed_columns, build_X
 
 MODEL_DIR = os.environ.get("MODEL_DIR", "models")
 
+# Guardrail 3 (see predict_season): discount applied to a player's projection based on
+# their *current* roster status. Not a training feature — just a soft prediction-time
+# haircut for players who are presently hurt or off a roster. Modest, not zero, since a
+# status snapshot taken today doesn't guarantee it still applies once next season starts.
+STATUS_DISCOUNTS = {
+    "Injured Reserve": 0.80,
+    "PUP": 0.85,
+    "Suspended": 0.75,
+    "Inactive": 0.90,
+}
+
 app = FastAPI(title="FantasyFootball ML API", version="1.0.0")
 
 _models: dict = {}  # position → {"model": ..., "features": [...]}
@@ -53,6 +64,10 @@ class PlayerStats(BaseModel):
     name: str
     position: str
     age: Optional[int] = None
+    # Sleeper's *current* roster status (e.g. "Active", "Inactive", "Injured Reserve").
+    # Never trained on — Sleeper only exposes today's status, not season history — but
+    # used at prediction time to discount players who are currently hurt/unrostered.
+    status: Optional[str] = None
     games_played: int = 0
     total_points: float = 0.0
     # Passing
@@ -69,6 +84,8 @@ class PlayerStats(BaseModel):
     receiving_td: int = 0
     reception_pct: float = 0.0
     fumbles: int = 0
+    # Usage — % of the team's offensive snaps this player played (season average)
+    snap_pct: float = 0.0
     # Kicker
     pat_made: int = 0
     pat_missed: int = 0
@@ -176,6 +193,14 @@ def predict_season(request: SeasonPredictionRequest) -> SeasonPredictionResponse
         # Allows genuine breakout years while preventing runaway extrapolation.
         if player.total_points > 0:
             projected = min(projected, player.total_points * 1.40)
+
+        # ── Guardrail 3: current status discount ──────────────────────────────
+        # Players currently marked hurt/unrostered get a modest haircut. This is
+        # deliberately soft — status is a snapshot taken today, not a guarantee
+        # about next season.
+        discount = STATUS_DISCOUNTS.get(player.status)
+        if discount is not None:
+            projected *= discount
 
         predictions.append(PlayerPrediction(
             name=player.name,

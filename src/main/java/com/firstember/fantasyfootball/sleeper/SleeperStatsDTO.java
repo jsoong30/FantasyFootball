@@ -28,6 +28,10 @@ public class SleeperStatsDTO {
     // Misc
     private int fumbles;
 
+    // Usage — offensive snaps played and the team's total offensive snaps, summed across weeks
+    private int offSnaps;
+    private int teamOffSnaps;
+
     // Kicker
     private int patMade;
     private int patMissed;
@@ -63,6 +67,9 @@ public class SleeperStatsDTO {
         // Sleeper uses "rec_tgt" for targets
         targets      += asInt(week, "rec_tgt");
         fumbles      += asInt(week, "fum_lost");
+
+        offSnaps     += asInt(week, "off_snp");
+        teamOffSnaps += asInt(week, "tm_off_snp");
 
         // Kicker PATs
         patMade      += asInt(week, "xpm");
@@ -120,6 +127,8 @@ public class SleeperStatsDTO {
     public int getReceivingTd()     { return receivingTd; }
     public int getTargets()         { return targets; }
     public int getFumbles()         { return fumbles; }
+    public int getOffSnaps()        { return offSnaps; }
+    public int getTeamOffSnaps()    { return teamOffSnaps; }
     public int getPatMade()         { return patMade; }
     public int getPatMissed()       { return patMissed; }
     public int getFgMade0_19()      { return fgMade0_19; }

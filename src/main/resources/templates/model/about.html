@@ -20,6 +20,7 @@
             <a th:href="@{/players}">Players</a>
             <a th:href="@{/teams}">Teams</a>
             <a th:href="@{/stats}">Stats</a>
+            <a th:href="@{/rankings}">Rankings</a>
             <a th:href="@{/predictions}">Predictions</a>
             <a th:href="@{/model}" aria-current="page">Model</a>
             <a th:href="@{/players}" class="btn primary" style="margin-left:20px;padding:7px 16px;font-size:13px;">Get Started</a>
@@ -114,7 +115,7 @@
                 </tr>
                 <tr style="border-bottom:1px solid var(--border);">
                     <td style="padding:8px 6px;"><code>age</code>, <code>age_sq</code></td>
-                    <td style="padding:8px 6px; color:var(--muted);">Player's age and its square, letting the model fit a curved (rise-peak-decline) aging pattern instead of a straight line.</td>
+                    <td style="padding:8px 6px; color:var(--muted);">Player's age (as of Sept 1 of that season, computed from birth date) and its square, letting the model fit a curved (rise-peak-decline) aging pattern instead of a straight line.</td>
                     <td style="padding:8px 6px;">QB, RB, WR, TE, K <span class="muted">(not DST — team unit, no single age)</span></td>
                 </tr>
 
@@ -225,6 +226,16 @@
                         projecting runaway, unrealistic jumps.</p>
                 </div>
             </div>
+            <div class="ai-feature">
+                <span class="ai-feature-icon">🩹</span>
+                <div>
+                    <strong>Status Discount</strong>
+                    <p>Players currently marked Injured Reserve, PUP, Suspended, or Inactive on Sleeper get a
+                        modest haircut (roughly 10–25% depending on severity). This is a soft, prediction-time
+                        signal only — Sleeper only exposes a player's <em>current</em> roster status, not a
+                        history of it, so status is never fed into training the way box-score stats are.</p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -274,7 +285,7 @@
         <h2>Known Limitations</h2>
         <p style="margin:0 0 10px;">The model currently does <em>not</em> account for:</p>
         <ul style="margin:0; padding-left:20px; color:var(--muted); line-height:1.9;">
-            <li>Injury history or current injury/practice status</li>
+            <li><strong>Historical</strong> injury data — Sleeper only exposes a player's status as of right now, not per-season history, so a player's <em>current</em> status only informs a soft discount at prediction time (see Status Discount above), not the trained model itself</li>
             <li>Target share, snap share, or backfield/depth-chart competition</li>
             <li>Coaching or scheme changes (new OC/HC, run-first vs. pass-first shifts)</li>
             <li>Draft capital, ADP, or market consensus</li>

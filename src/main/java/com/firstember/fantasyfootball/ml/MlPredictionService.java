@@ -234,6 +234,9 @@ public class MlPredictionService {
         m.put("name",           p.getFullName());
         m.put("position",       p.getPosition());
         m.put("age",            p.getAge());
+        // Current roster status only — used as a prediction-time guardrail, never a
+        // trainable historical feature (see Player.status javadoc for why).
+        m.put("status",         p.getStatus());
         m.put("games_played",   gamesPlayed);
         m.put("total_points",   orZero(s.getTotalPoints()));
         m.put("passing_yds",    orZero(s.getPassingYds()));
@@ -261,6 +264,10 @@ public class MlPredictionService {
         int tgt = orZero(s.getTargets());
         int rec = orZero(s.getReceivingRec());
         m.put("reception_pct", tgt > 0 ? Math.round(rec * 1000.0 / tgt) / 10.0 : 0.0);
+
+        int offSnaps = orZero(s.getOffSnaps());
+        int teamOffSnaps = orZero(s.getTeamOffSnaps());
+        m.put("snap_pct", teamOffSnaps > 0 ? Math.round(offSnaps * 1000.0 / teamOffSnaps) / 10.0 : 0.0);
 
         // Two-season trend features
         double prev2Pts  = prev2 != null ? orZero(prev2.getTotalPoints()) : 0.0;

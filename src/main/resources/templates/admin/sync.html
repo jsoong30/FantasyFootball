@@ -20,6 +20,7 @@
         <nav class="nav">
             <a th:href="@{/players}">Players</a>
             <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/stats}">Stats</a>
             <a th:href="@{/rankings}">Rankings</a>
             <a th:href="@{/model}">Model</a>
             <a th:href="@{/admin/sync}" aria-current="page">Sync Data</a>
@@ -112,6 +113,55 @@
             </div>
             <button type="submit" class="btn primary" style="padding:9px 22px;">
                 Run Predictions
+            </button>
+        </form>
+    </div>
+
+    <!-- Weekly sync card -->
+    <div class="card" style="margin-top:28px;">
+        <h2 style="margin:0 0 8px; font-size:1.05rem;">Sync a Single Week</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 16px; line-height:1.6;">
+            Fetches just one week of stats instead of the full season — use this for in-season
+            weekly refreshes. Season Type "Preseason" is a dry run only (fetches and reports what
+            Sleeper has, but doesn't save it — preseason data isn't kept once the regular season starts).
+        </p>
+
+        <!-- Result banner -->
+        <div th:if="${weekMessage != null}"
+             th:classappend="${weekSuccess} ? 'pred-banner-live' : ''"
+             class="pred-banner"
+             style="margin-bottom:16px;">
+            <span style="font-size:22px;" th:text="${weekSuccess} ? '✅' : '❌'">✅</span>
+            <div>
+                <strong th:text="${weekSuccess} ? 'Week sync complete' : 'Sync failed'">Result</strong>
+                <p th:text="${weekMessage}">Details here.</p>
+            </div>
+        </div>
+
+        <form th:action="@{/admin/sync-week}" method="post" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <label for="weekYear" style="font-size:13px; color:var(--muted);">Season Year</label>
+                <input id="weekYear" name="year" type="number" value="2026" min="2020" max="2030"
+                       style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px; width:110px;">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <label for="weekNum" style="font-size:13px; color:var(--muted);">Week</label>
+                <input id="weekNum" name="week" type="number" value="1" min="1" max="18"
+                       style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px; width:90px;">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <label for="seasonType" style="font-size:13px; color:var(--muted);">Season Type</label>
+                <select id="seasonType" name="seasonType"
+                        style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                               background:var(--bg); color:var(--text); font-size:14px;">
+                    <option value="regular">Regular</option>
+                    <option value="pre">Preseason (dry run)</option>
+                </select>
+            </div>
+            <button type="submit" class="btn primary" style="padding:9px 22px;">
+                Sync Week
             </button>
         </form>
     </div>

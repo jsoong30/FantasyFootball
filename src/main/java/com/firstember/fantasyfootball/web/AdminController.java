@@ -86,6 +86,28 @@ public class AdminController {
     }
 
     /**
+     * Sync a single week of stats instead of the full 18-week season — for in-season refreshes,
+     * or a "pre" seasonType dry run against preseason data before the regular season starts.
+     * POST /admin/sync-week?year=2026&week=1&seasonType=regular
+     */
+    @PostMapping("/sync-week")
+    public String syncWeek(@RequestParam(defaultValue = "2026") int year,
+                           @RequestParam(defaultValue = "1") int week,
+                           @RequestParam(defaultValue = "regular") String seasonType,
+                           Model model) {
+        try {
+            String result = sleeperService.syncWeek(year, week, seasonType);
+            model.addAttribute("weekMessage", result);
+            model.addAttribute("weekSuccess", true);
+        } catch (Exception e) {
+            model.addAttribute("weekMessage", "Week sync failed: " + e.getMessage());
+            model.addAttribute("weekSuccess", false);
+        }
+        model.addAttribute("message", null);
+        return "admin/sync";
+    }
+
+    /**
      * Backfill opponent_code on existing PlayerWeeklyStat rows for a given season
      * by fetching the NFL schedule from ESPN's public scoreboard API.
      * POST /admin/sync-opponents?year=2025
@@ -171,6 +193,7 @@ public class AdminController {
            .append("passing_yds,passing_td,passing_int,")
            .append("rushing_yds,rushing_td,")
            .append("targets,receiving_rec,receiving_yds,receiving_td,reception_pct,fumbles,")
+           .append("off_snaps,team_off_snaps,snap_pct,")
            .append("pat_made,pat_missed,fg_made,")
            .append("def_sacks,def_ints,def_fum_rec,def_td,def_safeties,def_blocked_kicks,")
            .append("pts_allowed,yds_allowed,")
@@ -183,6 +206,11 @@ public class AdminController {
             double recPct = 0.0;
             if (s.getTargets() != null && s.getTargets() > 0 && s.getReceivingRec() != null) {
                 recPct = Math.round(s.getReceivingRec() * 1000.0 / s.getTargets()) / 10.0;
+            }
+
+            double snapPct = 0.0;
+            if (s.getTeamOffSnaps() != null && s.getTeamOffSnaps() > 0 && s.getOffSnaps() != null) {
+                snapPct = Math.round(s.getOffSnaps() * 1000.0 / s.getTeamOffSnaps()) / 10.0;
             }
 
             List<Double> wkPts = weeklyPtsMap.getOrDefault(p.getId() + "_" + s.getSeason(), List.of());
@@ -206,6 +234,9 @@ public class AdminController {
                .append(i(s.getReceivingTd())).append(',')
                .append(recPct).append(',')
                .append(i(s.getFumbles())).append(',')
+               .append(i(s.getOffSnaps())).append(',')
+               .append(i(s.getTeamOffSnaps())).append(',')
+               .append(snapPct).append(',')
                .append(i(s.getPatMade())).append(',')
                .append(i(s.getPatMissed())).append(',')
                .append(sum(s.getFgMade0_19(), s.getFgMade20_29(), s.getFgMade30_39(),

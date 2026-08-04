@@ -11,4 +11,6 @@ public interface PlayerPredictionRepository extends JpaRepository<PlayerPredicti
     List<PlayerPrediction> findByPredictedSeason(Integer season);
 
     Optional<PlayerPrediction> findByPlayer_IdAndPredictedSeason(Long playerId, Integer season);
+
+    boolean existsByPredictedSeason(Integer season);
 }
