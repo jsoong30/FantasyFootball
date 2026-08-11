@@ -272,6 +272,26 @@ public class SleeperService {
         return msg;
     }
 
+    /**
+     * Live depth-chart position for every player, keyed by Sleeper player id (== our
+     * {@code Player.externalId}). 1 = current starter at that spot, 2 = primary backup, etc.
+     * <p>
+     * Like {@code status}, this only ever reflects *today's* roster — Sleeper doesn't expose
+     * historical depth charts — so it can never be a trained feature. It's used purely as a
+     * prediction-time guardrail input, to give the model a forward-looking signal for "is this
+     * player's role currently contested" that no historical box-score feature can see (e.g. a
+     * teammate who left in the offseason simply won't appear in this season's live pull).
+     */
+    public Map<String, Integer> currentDepthChartOrders() {
+        Map<String, Integer> result = new HashMap<>();
+        fetchAllPlayers().forEach((sleeperId, dto) -> {
+            if (dto.getDepthChartOrder() != null) {
+                result.put(sleeperId, dto.getDepthChartOrder());
+            }
+        });
+        return result;
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /** GET /players/nfl → Map<sleeper_player_id, SleeperPlayerDTO> */

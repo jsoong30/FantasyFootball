@@ -6,6 +6,10 @@ import com.firstember.fantasyfootball.domain.PlayerStat;
 import com.firstember.fantasyfootball.repo.PlayerPredictionRepository;
 import com.firstember.fantasyfootball.repo.PlayerStatRepository;
 import com.firstember.fantasyfootball.repo.PlayerWeeklyStatRepository;
+import com.firstember.fantasyfootball.sleeper.SleeperService;
+import com.firstember.fantasyfootball.external.FantasyCalculatorService;
+import com.firstember.fantasyfootball.external.FantasyProsService;
+import com.firstember.fantasyfootball.external.NameUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +33,9 @@ public class MlPredictionService {
     private final PlayerStatRepository playerStatRepository;
     private final PlayerWeeklyStatRepository weeklyStatRepository;
     private final PlayerPredictionRepository predictionRepository;
+    private final SleeperService sleeperService;
+    private final FantasyCalculatorService fantasyCalculatorService;
+    private final FantasyProsService fantasyProsService;
 
     @Value("${ml.api.url:http://localhost:8000}")
     private String mlApiUrl;
@@ -36,7 +43,10 @@ public class MlPredictionService {
     public MlPredictionService(RestTemplateBuilder builder,
                                PlayerStatRepository playerStatRepository,
                                PlayerWeeklyStatRepository weeklyStatRepository,
-                               PlayerPredictionRepository predictionRepository) {
+                               PlayerPredictionRepository predictionRepository,
+                               SleeperService sleeperService,
+                               FantasyCalculatorService fantasyCalculatorService,
+                               FantasyProsService fantasyProsService) {
         this.restTemplate = builder
                 .connectTimeout(Duration.ofSeconds(5))
                 .readTimeout(Duration.ofSeconds(30))
@@ -44,6 +54,9 @@ public class MlPredictionService {
         this.playerStatRepository = playerStatRepository;
         this.weeklyStatRepository = weeklyStatRepository;
         this.predictionRepository = predictionRepository;
+        this.sleeperService = sleeperService;
+        this.fantasyCalculatorService = fantasyCalculatorService;
+        this.fantasyProsService = fantasyProsService;
     }
 
     /** Returns true if the Python ML server is reachable and has at least one model loaded. */
@@ -110,6 +123,41 @@ public class MlPredictionService {
         Map<Long, Double> oppStrengthMap = computeOppStrength(sourceSeason);
         log.info("Computed opp_pts_allowed for {} players", oppStrengthMap.size());
 
+        // Live depth-chart snapshot (today's roster, not sourceSeason's) — see
+        // SleeperService.currentDepthChartOrders() javadoc for why this can't be a
+        // trained feature and is only used as a prediction-time guardrail input.
+        Map<String, Integer> depthChartMap;
+        try {
+            depthChartMap = sleeperService.currentDepthChartOrders();
+            log.info("Fetched live depth chart for {} players", depthChartMap.size());
+        } catch (Exception e) {
+            log.warn("Could not fetch live depth chart, continuing without it: {}", e.getMessage());
+            depthChartMap = Map.of();
+        }
+        final Map<String, Integer> depthChartOrders = depthChartMap;
+
+        // Market signals — live ADP (free, no key) and consensus point projections (needs a
+        // free FantasyPros key, see application.yml). Both are forward-looking in a way no
+        // trained feature can be, since they price in offseason news. See serve.py's Guardrail
+        // 5 for how these get blended into the final projection.
+        Map<String, Double> adpMap;
+        try {
+            adpMap = fantasyCalculatorService.currentAdp(12);
+        } catch (Exception e) {
+            log.warn("Could not fetch ADP, continuing without it: {}", e.getMessage());
+            adpMap = Map.of();
+        }
+        Map<String, Double> marketPointsMap;
+        try {
+            marketPointsMap = fantasyProsService.currentProjections(targetSeason);
+        } catch (Exception e) {
+            log.warn("Could not fetch FantasyPros projections, continuing without them: {}", e.getMessage());
+            marketPointsMap = Map.of();
+        }
+        log.info("Fetched {} ADP entries, {} consensus projections", adpMap.size(), marketPointsMap.size());
+        final Map<String, Double> adpByKey = adpMap;
+        final Map<String, Double> marketPointsByKey = marketPointsMap;
+
         // Build request payload
         List<Map<String, Object>> players = stats.stream().map(s -> {
             int gp = gamesPlayedMap.getOrDefault(s.getPlayer().getId(), 0);
@@ -120,7 +168,15 @@ public class MlPredictionService {
             List<Double> wkPts = weeklyPtsMap.getOrDefault(s.getPlayer().getId(), List.of());
             ConsistencyStats cs = ConsistencyStats.of(wkPts);
             double oppPtsAllowed = oppStrengthMap.getOrDefault(s.getPlayer().getId(), 0.0);
-            return statToPayload(s, gp, prev2, prev2Gp, cs, oppPtsAllowed);
+            Integer depthChartOrder = depthChartOrders.get(s.getPlayer().getExternalId());
+            // Separate normalized key -- market sources disagree on suffixes (e.g. FantasyPros'
+            // "James Cook III" vs our "James Cook"), see NameUtil. prev2StatMap above is
+            // internal-only (both sides are our own DB) so it doesn't need this.
+            String marketKey = NameUtil.key(s.getPlayer().getFullName(), s.getPlayer().getPosition());
+            Double marketAdp = adpByKey.get(marketKey);
+            Double marketPoints = marketPointsByKey.get(marketKey);
+            return statToPayload(s, gp, prev2, prev2Gp, cs, oppPtsAllowed, depthChartOrder,
+                    marketAdp, marketPoints);
         }).collect(Collectors.toList());
 
         Map<String, Object> requestBody = Map.of("players", players);
@@ -228,12 +284,22 @@ public class MlPredictionService {
 
     private Map<String, Object> statToPayload(PlayerStat s, int gamesPlayed,
                                               PlayerStat prev2, int prev2GamesPlayed,
-                                              ConsistencyStats cs, double oppPtsAllowed) {
+                                              ConsistencyStats cs, double oppPtsAllowed,
+                                              Integer depthChartOrder,
+                                              Double marketAdp, Double marketPoints) {
         Player p = s.getPlayer();
         Map<String, Object> m = new HashMap<>();
         m.put("name",           p.getFullName());
         m.put("position",       p.getPosition());
+        m.put("team",           p.getTeam() != null ? p.getTeam().getCode() : null);
         m.put("age",            p.getAge());
+        // Live depth-chart slot (1 = current starter) as of right now, not sourceSeason —
+        // see SleeperService.currentDepthChartOrders(). Never a trained feature.
+        m.put("depth_chart_order", depthChartOrder);
+        // Market signals (Guardrail 5 in serve.py) — never trained features, same reasoning
+        // as depth_chart_order: both reflect today, not sourceSeason.
+        m.put("market_adp",     marketAdp);
+        m.put("market_points",  marketPoints);
         // Current roster status only — used as a prediction-time guardrail, never a
         // trainable historical feature (see Player.status javadoc for why).
         m.put("status",         p.getStatus());
@@ -268,6 +334,7 @@ public class MlPredictionService {
         int offSnaps = orZero(s.getOffSnaps());
         int teamOffSnaps = orZero(s.getTeamOffSnaps());
         m.put("snap_pct", teamOffSnaps > 0 ? Math.round(offSnaps * 1000.0 / teamOffSnaps) / 10.0 : 0.0);
+        m.put("off_snaps", offSnaps);
 
         // Two-season trend features
         double prev2Pts  = prev2 != null ? orZero(prev2.getTotalPoints()) : 0.0;

@@ -26,7 +26,7 @@ POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"]
 #   higher means easier schedule, 0 means opponent data not yet backfilled.
 POSITION_FEATURES: dict[str, list[str]] = {
     "QB": [
-        "age", "age_sq", "games_played", "total_points", "points_per_game",
+        "age", "age_from_prime_sq", "games_played", "total_points", "points_per_game",
         "passing_yds", "passing_td", "passing_int",
         "rushing_yds", "rushing_td",
         "snap_pct",
@@ -35,32 +35,32 @@ POSITION_FEATURES: dict[str, list[str]] = {
         "opp_pts_allowed",
     ],
     "RB": [
-        "age", "age_sq", "games_played", "total_points", "points_per_game",
+        "age", "age_from_prime_sq", "games_played", "total_points", "points_per_game",
         "rushing_yds", "rushing_td",
         "targets", "receiving_rec", "receiving_yds", "receiving_td", "reception_pct",
-        "snap_pct",
+        "snap_pct", "team_position_share",
         "prev2_total_points", "prev2_points_per_game", "pts_delta", "has_prev2",
         "weekly_pts_std", "floor", "ceiling", "games_over_10", "games_over_20",
         "opp_pts_allowed",
     ],
     "WR": [
-        "age", "age_sq", "games_played", "total_points", "points_per_game",
+        "age", "age_from_prime_sq", "games_played", "total_points", "points_per_game",
         "targets", "receiving_rec", "receiving_yds", "receiving_td", "reception_pct",
-        "snap_pct",
+        "snap_pct", "team_position_share",
         "prev2_total_points", "prev2_points_per_game", "pts_delta", "has_prev2",
         "weekly_pts_std", "floor", "ceiling", "games_over_10", "games_over_20",
         "opp_pts_allowed",
     ],
     "TE": [
-        "age", "age_sq", "games_played", "total_points", "points_per_game",
+        "age", "age_from_prime_sq", "games_played", "total_points", "points_per_game",
         "targets", "receiving_rec", "receiving_yds", "receiving_td", "reception_pct",
-        "snap_pct",
+        "snap_pct", "team_position_share",
         "prev2_total_points", "prev2_points_per_game", "pts_delta", "has_prev2",
         "weekly_pts_std", "floor", "ceiling", "games_over_10", "games_over_20",
         "opp_pts_allowed",
     ],
     "K": [
-        "age", "age_sq", "games_played", "total_points", "points_per_game",
+        "age", "age_from_prime_sq", "games_played", "total_points", "points_per_game",
         "fg_made", "pat_made", "pat_missed",
         "prev2_total_points", "prev2_points_per_game", "pts_delta", "has_prev2",
         "weekly_pts_std", "floor", "ceiling",
@@ -76,11 +76,21 @@ POSITION_FEATURES: dict[str, list[str]] = {
 }
 
 
+PRIME_AGE = 26.5  # typical skill-position physical peak
+
+
 def add_computed_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Add derived columns used as features but not stored in the DB."""
     df = df.copy()
     df["points_per_game"] = df["total_points"] / df["games_played"].clip(lower=1)
-    df["age_sq"] = df["age"].fillna(0) ** 2
+    # age_sq (raw age**2) is monotonically increasing across the whole 20-38 range,
+    # so it can never encode "peak at X, decline both directions" -- it can only add
+    # curvature to a strictly-increasing-or-decreasing trend. age_from_prime_sq is
+    # minimized AT the prime age and rises on both sides, giving the model a direct
+    # peak-shaped signal instead of asking it to reconstruct one from raw age with
+    # only a few hundred rows per position to learn from.
+    age = df["age"].fillna(0)
+    df["age_from_prime_sq"] = (age - PRIME_AGE) ** 2
     return df
 
 
@@ -150,6 +160,31 @@ def add_schedule_strength(season_df: pd.DataFrame,
     )
     result["opp_pts_allowed"] = result["opp_pts_allowed"].fillna(0.0)
     return result
+
+
+def add_team_position_share(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add ``team_position_share`` -- this player's share of offensive snaps
+    played among all same-team, same-position teammates that season (0-1).
+
+    This is the closest proxy to "backfield/room competition" we can build
+    without a new data source: off_snaps is already synced per player-season.
+    A back who played 90% of his team's RB snaps had a clear/uncontested
+    role; a back at 50% was in a real committee. It's a current-season
+    signal, not a forward-looking one -- it can't know a teammate left in
+    the offseason -- but a player who *already* commanded a near-total
+    share is a meaningfully different situation than a committee back, and
+    that distinction was previously invisible to the model (snap_pct is
+    share of the whole *offense*, not share within the position group).
+    """
+    df = df.copy()
+    # Training data spans multiple seasons (group by season+team+position); a live
+    # prediction request is implicitly a single season's snapshot, so group by
+    # team+position only when there's no season column to split on.
+    group_cols = ["season", "team", "position"] if "season" in df.columns else ["team", "position"]
+    team_pos_snaps = df.groupby(group_cols)["off_snaps"].transform("sum")
+    df["team_position_share"] = (df["off_snaps"] / team_pos_snaps.clip(lower=1)).fillna(0)
+    return df
 
 
 def make_training_pairs(df: pd.DataFrame) -> pd.DataFrame:

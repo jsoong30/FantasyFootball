@@ -18,6 +18,10 @@ ml:
   api:
     url: ${ML_API_URL:http://localhost:8000}
 
+fantasypros:
+  api:
+    key: ${FANTASY_PROS_API:}
+
 
 
 

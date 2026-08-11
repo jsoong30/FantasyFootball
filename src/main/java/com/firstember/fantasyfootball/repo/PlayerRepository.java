@@ -36,4 +36,12 @@ public interface PlayerRepository extends JpaRepository<Player, Long> {
      * (e.g. existing CSV-loaded players). Returns the first match.
      */
     Optional<Player> findFirstByFullNameAndPositionAndSeason(String fullName, String position, Integer season);
+
+    /**
+     * Resolve a Sleeper player id to whatever the most recently synced season's row is.
+     * Used for "current" concepts that aren't season-indexed themselves (e.g. fantasy
+     * league rosters) -- there's no single "right" season for a live roster, so this
+     * just takes the newest data we have.
+     */
+    Optional<Player> findFirstByExternalIdOrderBySeasonDesc(String externalId);
 }

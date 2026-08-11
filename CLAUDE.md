@@ -37,6 +37,12 @@ DB credentials come from `.env` (gitignored) and `src/main/resources/application
 `application.yml` uses `${POSTGRES_USER}` / `${POSTGRES_PASSWORD}` environment variables.
 Hibernate DDL is set to `update` — it auto-creates and auto-migrates columns on startup.
 
+`.env` is loaded into the Spring Boot process via `"envFile": "${workspaceFolder}/.env"` in `.vscode/launch.json`
+(added when the FantasyPros integration needed a key) — it was previously only read by Docker Compose for Postgres.
+`FANTASY_PROS_API` in `.env` maps to `${FANTASY_PROS_API:}` → `fantasypros.api.key` in `application.yml`. If this
+env var is missing, `FantasyProsService` logs and returns an empty map rather than failing — the market-consensus
+blend (Guardrail 5 in serve.py) is a nice-to-have, not load-bearing.
+
 ### Spring Boot
 Run via VS Code Run & Debug panel with profile `local` (reads `application-local.yml`).
 App starts on `localhost:8080`.
@@ -121,6 +127,73 @@ FantasyFootball/
 - Sleeper sends "LVR" → we normalize to "LV"; "JAC" → "JAX"
 - ESPN sends "WSH" → we normalize to "WAS"; "LA" → "LAR"
 
+### `FantasyLeague` / `FantasyTeam` / `FantasyRosterPlayer`
+- Sleeper fantasy leagues — **private per-user, not shared**. If two different app users are in
+  the same real Sleeper league and both add it, each gets their own independent `FantasyLeague`
+  row (own sync, own re-sync cadence) rather than one shared row. `FantasyLeague.owner` (→
+  `User`) enforces this: `(sleeper_league_id, owner_id)` is the unique constraint, not
+  `sleeper_league_id` alone, and every repository lookup in `LeagueController` is scoped by
+  `owner_id` — a user can never view/sync/delete another user's league, even by guessing its id
+  (`GET /league/{id}` on someone else's league just renders "not found," it doesn't leak
+  existence). Add/remove/re-sync from the `/league` page itself (paste a Sleeper league id), not
+  via admin or config — `/admin` is being closed off from public access.
+- `FantasyTeam` = one roster slot (a team in a league): owner, custom team name (falls back to
+  Sleeper display name), record, division. It stores `ownerUserId` (Sleeper's, from the sync) but
+  **deliberately does not store "is this mine"** — see Authentication below for why that has to
+  be resolved per-request instead (still needed even though leagues are private now — a league
+  still has 11 other teams belonging to leaguemates who aren't you).
+- `FantasyRosterPlayer` stores the raw Sleeper player id, not a hard FK to `Player` — `Player` is
+  season-indexed and a fantasy roster is a "right now" concept with no season of its own.
+  Resolved to a display name/position at read time via `PlayerRepository.findFirstByExternalIdOrderBySeasonDesc()`.
+- Rosters are empty until a league leaves `pre_draft` — that's expected, not a bug. Re-sync after
+  a draft to populate them. **Sleeper's standalone "mock draft" tool does NOT populate
+  `league/rosters`** — it's a separate object from a league's real draft. To test the roster-sync
+  path, create a small throwaway league and run an actual (even fast/instant) draft in it; a
+  practice mock draft won't exercise this code path at all.
+
+### `User`
+- A real app account (email + BCrypt password hash) — separate from Sleeper identity, since
+  Sleeper has no OAuth/login for third-party apps (it's a read-only public API). See
+  Authentication below.
+
+---
+
+## Authentication & Multi-User
+
+The app moved from "single personal tool" to "shared app, multiple people log in" — this shaped
+several decisions worth knowing before touching auth or the league feature:
+
+- **Trusted-group phase, built to extend to public later**: registration (`/register`) is
+  currently open, no invite code or email verification. `User.enabled` exists specifically so a
+  future public rollout is a policy change (gate `enabled` on email verification) rather than a
+  data model change.
+- **Real accounts, not "just pick a Sleeper username"**: since Sleeper has no login delegation,
+  `User` has its own email/password, and separately holds `sleeperUsername` (set via `/profile`).
+  On save, `sleeperUsername` is resolved to `sleeperUserId` immediately via
+  `FantasyLeagueService.resolveSleeperUserId()` and cached — this id (not the username) is what
+  actually gets compared against `FantasyTeam.ownerUserId`, since Sleeper display names aren't
+  guaranteed stable/unique the way the numeric id is.
+- **Leagues are private per-user (own row per owner), but "mine" is still per-viewer within a
+  league**: your own league still has 11 other teams belonging to leaguemates, so "is this my
+  team" still can't be a stored fact on `FantasyTeam`. `LeagueController.detail()` computes a
+  `mineMap` per request by comparing the *current logged-in user's* cached `sleeperUserId`
+  against each team's `ownerUserId`. Do not reintroduce a stored `isMine`/`mine` field on
+  `FantasyTeam` — it was removed for exactly this reason.
+- **Stale-session gotcha**: Spring Security caches the principal object (`AppUserPrincipal`,
+  wrapping `User`) in the HTTP session at login time. If a profile edit (e.g. linking a Sleeper
+  account) only updates the DB, the *current* session keeps serving the old cached values until
+  the user logs out and back in — the "YOU" tag silently wouldn't appear even though the DB is
+  correct. `ProfileController.refreshSessionPrincipal()` fixes this by rebuilding the session's
+  `Authentication` immediately after every save. Any future controller that mutates `User` needs
+  to call something equivalent, or the change won't be visible until next login.
+- **CSRF is enabled** (`thymeleaf-extras-springsecurity6` is already a dependency, which
+  auto-injects the `_csrf` hidden field into every `th:action` form — no per-form changes
+  needed). It was disabled in the original scaffold; re-enabling it required no other changes
+  since every existing POST form in the app already uses `th:action`.
+- **Whole app requires login** except `/login`, `/register`, and static assets — this was a
+  deliberate broad choice (not just gating the league feature) since the app is moving toward
+  being a real multi-user product.
+
 ---
 
 ## Admin Panel (`/admin/sync`)
@@ -167,6 +240,17 @@ py -m uvicorn serve:app --host 0.0.0.0 --port 8000 --reload
 - Sends all player stats to the Python API → stores projections in `PlayerPrediction`
 - Requires Python server running with trained models loaded
 
+### 8. Fantasy League (`/league`, not `/admin`)
+- Deliberately lives outside the admin panel, which is being closed off from public access —
+  adding/syncing/deleting leagues needs to stay usable without admin access
+- `GET /league` — list every added league
+- `POST /league/add` (`sleeperLeagueId` form param) — add and immediately sync a league
+- `POST /league/{id}/sync` — re-sync one league's teams/owners/records/rosters
+- `POST /league/{id}/delete` — remove a league and everything under it
+- `GET /league/{id}` — teams/rosters detail view
+- Which team gets flagged "YOU" is per-viewer, from the logged-in user's linked Sleeper account
+  (`/profile`) — see the Authentication section above, not a config value
+
 ---
 
 ## ML Pipeline
@@ -199,8 +283,10 @@ Algorithm: `GradientBoostingRegressor(n_estimators=200, max_depth=3, learning_ra
 
 ### Key guardrails in `serve.py`
 1. **Rookie blending**: First-year players (`has_prev2=0`) get 55% model prediction + 45% position mean (prevents runaway extrapolation from a single season)
-2. **Improvement cap**: Max projection = 1.40× prior season total (prevents extreme outliers)
+2. **Swing cap**: Projection clamped to 0.60×–1.40× prior season total, symmetric (prevents extreme outliers in either direction — the model has no roster-context features, so a large predicted drop is just as likely to be regression-to-mean noise as a large predicted jump)
 3. **Status discount**: Players whose *current* Sleeper roster status is Injured Reserve/PUP/Suspended/Inactive get a modest projection haircut (`STATUS_DISCOUNTS` in serve.py). `status` is never a trained feature — see the gotcha below for why.
+4. **Live depth-chart nudge**: `depth_chart_order` (1 = current starter) is pulled fresh from Sleeper at prediction time via `SleeperService.currentDepthChartOrders()` — RB/WR/TE at depth 1 get a modest boost, depth 3+ a modest discount. Same reasoning as `status`: Sleeper only ever reports *today's* depth chart, so this can never be a trained feature, but it's the only forward-looking signal available for "did a teammate who competed for touches leave this offseason" — every trained feature is backward-looking (last season's box scores). Deliberately untuned/heuristic, and applied after the swing cap so it can push a projection beyond +/-40% when there's a specific reason to.
+5. **Market consensus blend**: pulls the projection toward FantasyPros' consensus PPR projection (`market_points`), scaled by how large the gap is (capped at 50/50) and by `adp_trust` — how good the player's live ADP (Fantasy Football Calculator, free/keyless) is within his own position. Two independent external sources agreeing is stronger evidence than either alone; a big FantasyPros gap with no ADP support gets damped, not ignored. This is a stronger, more general version of Guardrail 4 — added after diagnosing that elite-tier players (Gibbs, Bijan, Bowers, Nacua) were underrated by 25-36% specifically because their value story is entirely situational/offseason-driven, something no trained feature can see regardless of position. See `FantasyCalculatorService` and `FantasyProsService` in `com.firstember.fantasyfootball.external`.
 
 ### Evaluation
 `py train.py eval` — runs walk-forward cross-validation (trains on past seasons, tests on future).
@@ -248,9 +334,11 @@ Update these constants when a new season starts.
 - **Team code mismatches**: Sleeper uses "LVR"/"JAC", ESPN uses "WSH"/"LA". Normalization maps are `TEAM_CODE_FIX` (Sleeper) and `ESPN_CODE_FIX` (ESPN) in SleeperService.
 - **ConsistencyStats**: Must be a standalone file at `ml/ConsistencyStats.java` — NOT a static inner class. Spring's class loader cannot find inner classes across packages.
 - **`games_played` in ML payload**: Comes from counting `PlayerWeeklyStat` rows, not stored in `PlayerStat`. If `countWeeksByPlayerForSeason` returns 0, points_per_game defaults to total_points (a bug symptom, not a bug itself).
-- **Maven incremental compile**: After editing Java files on Windows, run with `-Dmaven.compiler.useIncrementalCompilation=false` if changes aren't picked up. Or `touch` the source files.
+- **Maven incremental compile**: After editing Java files on Windows, run with `-Dmaven.compiler.useIncrementalCompilation=false` if changes aren't picked up. Or `touch` the source files. This can silently mask a real compile error: `./mvnw compile -q` reported clean success after a change that actually introduced a duplicate-variable error (a method parameter and a loop-local variable both named `owner` in `FantasyLeagueService.syncLeague`) — the stale pre-edit class was reused instead of recompiling. The error only surfaced at runtime once `spring-boot:run`'s devtools recompiled it for real, as `java.lang.Error: Unresolved compilation problem`. If a change compiles suspiciously cleanly, re-run with `-Dmaven.compiler.useIncrementalCompilation=false` to be sure.
 - **Unicode in Python on Windows**: Use ASCII characters in print statements in train.py. `→` (U+2192) causes `UnicodeEncodeError` on Windows cmd with cp1252 encoding.
 - **Sleeper's `/players/nfl` is a live snapshot, not history**: `age` and `status` both come from this endpoint, which only ever returns *today's* values — there is no season-specific age/status in Sleeper's data. `SleeperService.upsertPlayer()` now derives `age` from the player's stored `birth_date` as-of Sept 1 of the season being synced (`ageForSeason()`), so re-syncing an old season no longer stamps today's age onto that historical row. `status` has no historical equivalent at all, so it is intentionally **not** a trained feature — it's only used as a prediction-time guardrail (discount for currently-injured/inactive players). Existing rows synced before this fix have `birth_date = NULL` and a stale `age` until re-synced.
+- **Don't log1p-transform the training target to fix elite-tier compression — tried it, made it worse**: Only ~2.5% of historical RB-seasons ever top 300 points, so the model badly under-projects breakout players (e.g. projected Jahmyr Gibbs/Bijan Robinson far below external consensus for 2026, despite both having a clear path to more touches). Wrapping the model in `TransformedTargetRegressor(func=np.log1p, inverse_func=np.expm1)` seemed like a fix, but `log1p` *shrinks* the loss's sensitivity to absolute gaps at the high end (log(400)-log(300) is small) while *inflating* it at the low end — it made the model care less about the tail, not more. Verified empirically: raw (pre-guardrail) output for Christian McCaffrey dropped to ~100 projected points. Reverted in `train.py`. The real fix needs a genuine roster-context feature (target share, backfield competition) — this model has no signal at all for "his backup left," which is the actual reason sites like Razzball project these players 35-40% higher than we do. See Future Work item 3.
+- **Legacy `Data_2024` CSV import left 1,079 orphaned duplicate rows**: predates the Sleeper sync pipeline (see the `./fantasy-football/Data_2024:/import` mount in docker-compose.yml). These had `players.season = NULL`, zero weekly stats, but a nonzero `total_points` — internally contradictory. `train.py`'s `MIN_GAMES` filter incidentally protected training data from them, but `MlPredictionService`'s `prev2StatMap` (keyed by `fullName|position`, no games-played guard) silently preferred whichever row loaded last, corrupting `prev2_points_per_game` to 0 for ~559 players. Cleaned up via one-time DB delete (`DELETE FROM player_stats/players WHERE season IS NULL` after confirming zero weekly-stat and zero-prediction references). If this pattern reappears after a future bulk import, check for `players.season IS NULL` first.
 
 ---
 
@@ -272,6 +360,15 @@ Update these constants when a new season starts.
 | GET | `/admin/export` | Download season stats CSV |
 | GET | `/admin/export?year=` | Download single-season CSV |
 | GET | `/admin/export/weekly` | Download weekly stats CSV |
+| GET | `/league` | List your added Sleeper leagues |
+| POST | `/league/add` | Add + sync a league (`sleeperLeagueId` param) |
+| GET | `/league/{id}` | One league's teams/owners/rosters |
+| POST | `/league/{id}/sync` | Re-sync one league |
+| POST | `/league/{id}/delete` | Delete a league |
+| GET/POST | `/register` | Create an account |
+| GET | `/login` | Log in (Spring Security form login) |
+| POST | `/logout` | Log out |
+| GET/POST | `/profile` | Link/change your Sleeper username |
 
 ### ML Server (Python FastAPI, port 8000)
 | Method | Path | Purpose |

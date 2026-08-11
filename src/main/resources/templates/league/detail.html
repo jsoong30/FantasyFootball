@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title th:text="${league != null} ? ${league.name} : 'League'">League</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <span style="font-size:22px;">🏈</span>
+            <div>
+                <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
+                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;">Your Sleeper League</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a th:href="@{/players}">Players</a>
+            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/predictions}">Predictions</a>
+            <a th:href="@{/league}" aria-current="page">League</a>
+            <a th:href="@{/model}">Model</a>
+            <a th:href="@{/profile}">Profile</a>
+            <form th:action="@{/logout}" method="post" style="display:inline;">
+                <button type="submit" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;padding:0;">Logout</button>
+            </form>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0;">
+
+    <div th:if="${league == null}" class="card" style="max-width:640px;">
+        <h1 style="margin:0 0 8px; font-size:1.2rem;">League not found</h1>
+        <p style="color:var(--muted); margin:0;">
+            <a th:href="@{/league}" style="color:var(--brand);">Back to your leagues</a>
+        </p>
+    </div>
+
+    <div th:if="${league != null}">
+        <a th:href="@{/league}" style="color:var(--muted); font-size:13px; text-decoration:none;">&larr; All leagues</a>
+
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin:8px 0 20px; flex-wrap:wrap; gap:12px;">
+            <div>
+                <h1 style="margin:0 0 4px;" th:text="${league.name}">League Name</h1>
+                <p class="muted" style="margin:0;">
+                    <span th:text="${teams.size()}">12</span> teams ·
+                    <span th:text="${league.status}">pre_draft</span> ·
+                    <span th:text="${league.season}">2026</span> season
+                </p>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <form th:action="@{/league/{id}/sync(id=${league.id})}" method="post">
+                    <button type="submit" class="btn primary" style="padding:8px 18px; font-size:13px;">Re-sync</button>
+                </form>
+                <form th:action="@{/league/{id}/delete(id=${league.id})}" method="post"
+                      onsubmit="return confirm('Delete this league? This removes all its synced teams and rosters.');">
+                    <button type="submit" class="btn" style="padding:8px 18px; font-size:13px; color:#e5484d;">Delete League</button>
+                </form>
+            </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px;">
+            <div class="card" th:each="team : ${teams}"
+                 th:style="${mineMap.get(team.id)} ? 'border-color:var(--brand);' : ''">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                    <div>
+                        <div style="font-weight:700; font-size:1rem;" th:text="${team.displayLabel}">Team Name</div>
+                        <div style="font-size:12px; color:var(--muted);" th:text="${team.ownerDisplayName}">owner</div>
+                    </div>
+                    <span th:if="${mineMap.get(team.id)}" class="btn primary"
+                          style="padding:3px 10px; font-size:11px; pointer-events:none;">YOU</span>
+                </div>
+
+                <div style="font-size:13px; color:var(--muted); margin-bottom:10px;">
+                    <span th:text="${(team.wins ?: 0) + '-' + (team.losses ?: 0) + (team.ties != null and team.ties > 0 ? ('-' + team.ties) : '')}">0-0</span>
+                    <span th:if="${team.division != null}" th:text="'· Division ' + ${team.division}"></span>
+                </div>
+
+                <div th:if="${rosterDisplay.get(team.id).isEmpty()}"
+                     style="font-size:12px; color:var(--muted); font-style:italic;">
+                    No roster yet — syncs automatically once your draft happens.
+                </div>
+                <ul th:unless="${rosterDisplay.get(team.id).isEmpty()}"
+                    style="list-style:none; margin:0; padding:0; font-size:13px; display:flex; flex-direction:column; gap:4px;">
+                    <li th:each="p : ${rosterDisplay.get(team.id)}" style="display:flex; justify-content:space-between;">
+                        <span th:text="${p.fullName}">Player Name</span>
+                        <span style="color:var(--muted);" th:text="${p.position}">POS</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
+    </div>
+</footer>
+</body>
+</html>

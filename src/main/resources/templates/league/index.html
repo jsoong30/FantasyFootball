@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Leagues</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <span style="font-size:22px;">🏈</span>
+            <div>
+                <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
+                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;">Your Sleeper Leagues</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a th:href="@{/players}">Players</a>
+            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/predictions}">Predictions</a>
+            <a th:href="@{/league}" aria-current="page">League</a>
+            <a th:href="@{/model}">Model</a>
+            <a th:href="@{/profile}">Profile</a>
+            <form th:action="@{/logout}" method="post" style="display:inline;">
+                <button type="submit" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;padding:0;">Logout</button>
+            </form>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0; max-width:720px;">
+    <h1 style="margin:0 0 6px;">Your Leagues</h1>
+    <p class="muted" style="margin:0 0 20px;">Add a Sleeper league by its league id, then pick one to view its teams.</p>
+
+    <!-- Add-league result banner -->
+    <div th:if="${addMessage != null}" class="pred-banner" style="margin-bottom:20px;">
+        <span style="font-size:22px;">ℹ️</span>
+        <div>
+            <strong>Add league</strong>
+            <p th:text="${addMessage}">Details here.</p>
+        </div>
+    </div>
+
+    <!-- Add league card -->
+    <div class="card" style="margin-bottom:24px;">
+        <h2 style="margin:0 0 10px; font-size:1.05rem;">Add a League</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 14px; line-height:1.6;">
+            Find your league id in its Sleeper URL (<code>sleeper.com/leagues/&lt;id&gt;/team</code>),
+            or ask — it can be looked up by your Sleeper username instead.
+        </p>
+        <form th:action="@{/league/add}" method="post" style="display:flex; gap:12px; align-items:flex-end;">
+            <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
+                <label for="sleeperLeagueId" style="font-size:13px; color:var(--muted);">Sleeper League ID</label>
+                <input id="sleeperLeagueId" name="sleeperLeagueId" type="text" required
+                       placeholder="e.g. 1382895985914552320"
+                       style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px;">
+            </div>
+            <button type="submit" class="btn primary" style="padding:9px 22px;">
+                Add &amp; Sync
+            </button>
+        </form>
+    </div>
+
+    <!-- League list -->
+    <div th:if="${leagues.isEmpty()}" class="card">
+        <p style="color:var(--muted); margin:0;">No leagues added yet.</p>
+    </div>
+
+    <div th:each="lg : ${leagues}" class="card" style="margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+        <a th:href="@{/league/{id}(id=${lg.id})}" style="text-decoration:none; color:inherit; flex:1;">
+            <div style="font-weight:700; font-size:1rem;" th:text="${lg.name}">League Name</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">
+                <span th:text="${lg.totalRosters}">12</span> teams ·
+                <span th:text="${lg.status}">pre_draft</span> ·
+                <span th:text="${lg.season}">2026</span>
+            </div>
+        </a>
+        <div style="display:flex; gap:8px;">
+            <form th:action="@{/league/{id}/sync(id=${lg.id})}" method="post">
+                <button type="submit" class="btn" style="padding:7px 14px; font-size:13px;">Re-sync</button>
+            </form>
+            <form th:action="@{/league/{id}/delete(id=${lg.id})}" method="post"
+                  onsubmit="return confirm('Delete ' + this.dataset.name + '? This removes all its synced teams and rosters.');"
+                  th:attr="data-name=${lg.name}">
+                <button type="submit" class="btn" style="padding:7px 14px; font-size:13px; color:#e5484d;">Delete</button>
+            </form>
+        </div>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
+    </div>
+</footer>
+</body>
+</html>

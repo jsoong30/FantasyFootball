@@ -22,8 +22,13 @@
             <a th:href="@{/teams}">Teams</a>
             <a th:href="@{/stats}">Stats</a>
             <a th:href="@{/rankings}">Rankings</a>
+            <a th:href="@{/league}">League</a>
             <a th:href="@{/model}">Model</a>
             <a th:href="@{/admin/sync}" aria-current="page">Sync Data</a>
+            <a th:href="@{/profile}">Profile</a>
+            <form th:action="@{/logout}" method="post" style="display:inline;">
+                <button type="submit" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;padding:0;">Logout</button>
+            </form>
         </nav>
     </div>
 </header>

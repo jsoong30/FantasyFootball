@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Log In</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <span style="font-size:22px;">🏈</span>
+            <div>
+                <span style="font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</span>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="container" style="padding:60px 0; max-width:400px;">
+    <div class="card">
+        <h1 style="margin:0 0 20px; font-size:1.3rem;">Log In</h1>
+
+        <div th:if="${param.error != null}" class="pred-banner" style="margin-bottom:18px;">
+            <span style="font-size:20px;">❌</span>
+            <div><p style="margin:0;">Wrong email or password.</p></div>
+        </div>
+        <div th:if="${param.registered != null}" class="pred-banner pred-banner-live" style="margin-bottom:18px;">
+            <span style="font-size:20px;">✅</span>
+            <div><p style="margin:0;">Account created — log in below.</p></div>
+        </div>
+        <div th:if="${param.logout != null}" class="pred-banner pred-banner-live" style="margin-bottom:18px;">
+            <span style="font-size:20px;">👋</span>
+            <div><p style="margin:0;">Logged out.</p></div>
+        </div>
+
+        <form th:action="@{/login}" method="post" style="display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <label for="username" style="font-size:13px; color:var(--muted);">Email</label>
+                <input id="username" name="username" type="email" required autofocus
+                       style="padding:10px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px;">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <label for="password" style="font-size:13px; color:var(--muted);">Password</label>
+                <input id="password" name="password" type="password" required
+                       style="padding:10px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px;">
+            </div>
+            <button type="submit" class="btn primary" style="padding:10px; margin-top:6px;">Log In</button>
+        </form>
+
+        <p style="margin:18px 0 0; color:var(--muted); font-size:13px; text-align:center;">
+            No account yet? <a th:href="@{/register}" style="color:var(--brand);">Sign up</a>
+        </p>
+    </div>
+</main>
+</body>
+</html>

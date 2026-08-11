@@ -16,13 +16,23 @@ import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import cross_val_score
 
-from features import POSITIONS, add_computed_columns, add_schedule_strength, make_training_pairs, build_X
+from features import POSITIONS, add_computed_columns, add_schedule_strength, add_team_position_share, make_training_pairs, build_X
 
 DATA_PATH   = os.environ.get("DATA_PATH",   "data/fantasy_stats_all.csv")
 WEEKLY_PATH = os.environ.get("WEEKLY_PATH", "data/fantasy_weekly_all.csv")
 MODEL_DIR   = os.environ.get("MODEL_DIR",   "models")
 MIN_GAMES   = int(os.environ.get("MIN_GAMES", "4"))   # drop players who barely played
 MIN_ROWS    = int(os.environ.get("MIN_ROWS",  "20"))   # minimum rows to train a position model
+
+
+def _make_model() -> GradientBoostingRegressor:
+    return GradientBoostingRegressor(
+        n_estimators=200,
+        max_depth=3,
+        learning_rate=0.05,
+        subsample=0.8,
+        random_state=42,
+    )
 
 
 def train() -> dict:
@@ -34,6 +44,7 @@ def train() -> dict:
 
     df = df[df["games_played"] >= MIN_GAMES].copy()
     df = add_computed_columns(df)
+    df = add_team_position_share(df)
 
     # Load weekly data for opponent-adjusted schedule strength (optional)
     weekly_df = None
@@ -60,13 +71,7 @@ def train() -> dict:
             print(f"[{pos:<3}] Skipping — only {len(X)} rows (need {MIN_ROWS})")
             continue
 
-        model = GradientBoostingRegressor(
-            n_estimators=200,
-            max_depth=3,
-            learning_rate=0.05,
-            subsample=0.8,
-            random_state=42,
-        )
+        model = _make_model()
 
         cv_folds = min(5, len(X))
         scores = cross_val_score(model, X, y, cv=cv_folds, scoring="neg_mean_absolute_error")
@@ -122,6 +127,7 @@ def evaluate() -> None:
     df = pd.read_csv(DATA_PATH)
     df = df[df["games_played"] >= MIN_GAMES].copy()
     df = add_computed_columns(df)
+    df = add_team_position_share(df)
     weekly_df = pd.read_csv(WEEKLY_PATH) if os.path.exists(WEEKLY_PATH) else None
     df = add_schedule_strength(df, weekly_df)
     training_df = make_training_pairs(df)
@@ -153,10 +159,7 @@ def evaluate() -> None:
             X_test  = build_X(test_df,  pos)
             y_test  = test_df["target_points"].values
 
-            m = GradientBoostingRegressor(
-                n_estimators=200, max_depth=3,
-                learning_rate=0.05, subsample=0.8, random_state=42,
-            )
+            m = _make_model()
             m.fit(X_train, y_train)
             mae = float(np.mean(np.abs(m.predict(X_test) - y_test)))
 

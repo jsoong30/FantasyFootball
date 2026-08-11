@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Profile</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <span style="font-size:22px;">🏈</span>
+            <div>
+                <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
+            </div>
+        </div>
+        <nav class="nav">
+            <a th:href="@{/players}">Players</a>
+            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/predictions}">Predictions</a>
+            <a th:href="@{/league}">League</a>
+            <a th:href="@{/model}">Model</a>
+            <a th:href="@{/profile}" aria-current="page">Profile</a>
+            <form th:action="@{/logout}" method="post" style="display:inline;">
+                <button type="submit" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;padding:0;">Logout</button>
+            </form>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0; max-width:480px;">
+    <h1 style="margin:0 0 6px;">Profile</h1>
+    <p class="muted" style="margin:0 0 20px;" th:text="${user.email}">you@example.com</p>
+
+    <div class="card">
+        <h2 style="margin:0 0 8px; font-size:1.05rem;">Link Your Sleeper Account</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 16px; line-height:1.6;">
+            This is how the app knows which team is <strong>yours</strong> in any shared league —
+            it doesn't log into Sleeper, it just looks up your public username.
+        </p>
+
+        <div th:if="${message != null}" class="pred-banner pred-banner-live" style="margin-bottom:16px;">
+            <span style="font-size:20px;">ℹ️</span>
+            <div><p style="margin:0;" th:text="${message}">Message</p></div>
+        </div>
+
+        <p th:if="${user.sleeperUsername != null}" style="font-size:13px; color:var(--muted); margin:0 0 14px;">
+            Currently linked: <strong th:text="${user.sleeperUsername}">username</strong>
+        </p>
+
+        <form th:action="@{/profile}" method="post" style="display:flex; gap:12px; align-items:flex-end;">
+            <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
+                <label for="sleeperUsername" style="font-size:13px; color:var(--muted);">Sleeper Username</label>
+                <input id="sleeperUsername" name="sleeperUsername" type="text"
+                       th:value="${user.sleeperUsername}" placeholder="e.g. Jsoong30"
+                       style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px;">
+            </div>
+            <button type="submit" class="btn primary" style="padding:9px 22px;">Save</button>
+        </form>
+        <p style="margin:12px 0 0; color:var(--muted); font-size:12px;">
+            Leave blank and save to unlink.
+        </p>
+    </div>
+</main>
+</body>
+</html>
