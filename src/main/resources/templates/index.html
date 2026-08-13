@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -26,7 +26,7 @@
             <a th:href="@{/predictions}">Predictions</a>
             <a th:href="@{/league}">League</a>
             <a th:href="@{/model}">Model</a>
-            <a th:href="@{/admin/sync}" style="color:var(--muted); font-size:12px;">Sync</a>
+            <a th:href="@{/admin/sync}" sec:authorize="hasRole('ADMIN')" style="color:var(--muted); font-size:12px;">Sync</a>
             <a th:href="@{/players}" class="btn primary" style="margin-left:20px;padding:7px 16px;font-size:13px;">Get Started</a>
             <a th:href="@{/profile}">Profile</a>
             <form th:action="@{/logout}" method="post" style="display:inline;">

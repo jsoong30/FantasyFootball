@@ -22,7 +22,11 @@ public class AppUserPrincipal implements UserDetails {
     public User getUser() { return user; }
 
     @Override public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        // Every user gets ROLE_USER; ROLE_ADMIN is additive for admins, not a replacement --
+        // so an admin still passes any check that just requires being a regular user.
+        return user.getRole() == com.firstember.fantasyfootball.domain.Role.ADMIN
+                ? List.of(new SimpleGrantedAuthority("ROLE_USER"), new SimpleGrantedAuthority("ROLE_ADMIN"))
+                : List.of(new SimpleGrantedAuthority("ROLE_USER"));
     }
 
     @Override public String getPassword() { return user.getPasswordHash(); }

@@ -64,6 +64,29 @@
         </form>
     </div>
 
+    <!-- Track any draft (testing) card -->
+    <div class="card" style="margin-bottom:24px;">
+        <h2 style="margin:0 0 10px; font-size:1.05rem;">Track a Draft</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 14px; line-height:1.6;">
+            View the live draft board for any Sleeper draft id — including a standalone practice
+            "mock draft," which isn't tied to a real league. Useful for trying the assistant out
+            before your actual draft. Find the id in the draft's URL
+            (<code>sleeper.com/draft/nfl/&lt;id&gt;</code>).
+        </p>
+        <form onsubmit="event.preventDefault(); var v=document.getElementById('trackDraftId').value.trim(); if(v) window.location.href='/draft/'+encodeURIComponent(v);"
+              style="display:flex; gap:12px; align-items:flex-end;">
+            <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
+                <label for="trackDraftId" style="font-size:13px; color:var(--muted);">Sleeper Draft ID</label>
+                <input id="trackDraftId" type="text" required placeholder="e.g. 1382895987483230208"
+                       style="padding:9px 14px; border-radius:10px; border:1px solid var(--border);
+                              background:var(--bg); color:var(--text); font-size:14px;">
+            </div>
+            <button type="submit" class="btn primary" style="padding:9px 22px;">
+                View Draft
+            </button>
+        </form>
+    </div>
+
     <!-- League list -->
     <div th:if="${leagues.isEmpty()}" class="card">
         <p style="color:var(--muted); margin:0;">No leagues added yet.</p>

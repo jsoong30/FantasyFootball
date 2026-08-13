@@ -193,6 +193,12 @@ several decisions worth knowing before touching auth or the league feature:
 - **Whole app requires login** except `/login`, `/register`, and static assets — this was a
   deliberate broad choice (not just gating the league feature) since the app is moving toward
   being a real multi-user product.
+- **`/admin/**` requires `ROLE_ADMIN`**, not just login. `User.role` (enum `USER`/`ADMIN`,
+  default `USER`) drives this via `AppUserPrincipal.getAuthorities()` — an admin gets both
+  `ROLE_USER` and `ROLE_ADMIN` (additive, not a replacement). There is no self-service promotion
+  path or admin UI for granting the role; it's set directly in the DB
+  (`UPDATE app_users SET role='ADMIN' WHERE email='...'`). Trusted-group members should not get
+  Sleeper-sync/ML-predict/CSV-export access just by having an account.
 
 ---
 
@@ -250,6 +256,57 @@ py -m uvicorn serve:app --host 0.0.0.0 --port 8000 --reload
 - `GET /league/{id}` — teams/rosters detail view
 - Which team gets flagged "YOU" is per-viewer, from the logged-in user's linked Sleeper account
   (`/profile`) — see the Authentication section above, not a config value
+
+### 9. Live Draft (`/draft/{sleeperDraftId}`)
+- Works against ANY Sleeper draft id, not just ones tied to a synced league — a standalone
+  practice "mock draft" has its own `draft_id` with no `league_id`, and `DraftController`/
+  `DraftService` don't require a league match to show the live board. This is the intended way
+  to test the feature before a real draft (see the roster-sync gotcha above about why a mock
+  draft doesn't test *everything*).
+- `GET /draft/{draftId}` — the board page; `GET /draft/{draftId}/data` — the JSON the frontend
+  polls every 4s (Sleeper has no push/websocket feed for third-party apps). Reused for both a
+  linked league (real team names, persists new picks into `FantasyRosterPlayer` — idempotent,
+  safe to re-poll) and a standalone draft (generic "Team {rosterId}" labels, nothing persisted
+  since there's no real league to attach picks to).
+- Suggestions are ranked by our own stored `PlayerPrediction` for `TARGET_SEASON` (already
+  ADP-aware via Guardrail 5), with raw ADP shown alongside for reference — not a second
+  from-scratch blend. Drafted players (matched by Sleeper `player_id`) are filtered out live.
+- Entry points: a "Live Draft" button on `/league/{id}` (only shown if `sleeperDraftId` is set),
+  and a standalone "Track a Draft" form on `/league` for pasting any draft id, including a mock
+  draft's.
+- Board is a Sleeper-style round × team grid (rows = rounds, columns = `draft_slot` 1..N), not a
+  flat pick list. **Columns are physical draft positions, not fixed team identities** — some
+  leagues (this app's own test league included) snake for the first 2 rounds then re-scramble
+  the pick order, so whoever sits in column 3 for round 1 is NOT necessarily who sits there in
+  round 4. Two consequences that must not get "simplified" away:
+  - The header row (`slotHeaders`) is only a best-effort "who's here right now" guess (seeded
+    from `slot_to_roster_id`/`draft_order`, then overwritten as picks reveal the current mapping).
+    It is explicitly NOT trusted for attributing any individual pick.
+  - Every pick's *own* team is always resolved fresh from that pick's own data — `roster_id` for
+    a linked league (a real team's roster_id is stable all draft long, unlike its column), or
+    `picked_by` (Sleeper user id) for a standalone draft — never from column/slot position. Each
+    drafted cell shows this as a small corner label, same as Sleeper's own board does, and for
+    the same reason: it's the only way to stay correct across a re-scramble. Don't go back to
+    "group all of a team's picks under one fixed column" — that was tried first and is wrong for
+    exactly this scenario (all 17 picks landed under one bucket in one bad version).
+  - "On the clock" — the *slot* due next is still deterministic from standard snake traversal
+    (position order doesn't change even when team-per-slot does), computed locally from
+    `pickCount + snake math`, not trusted from Sleeper directly. The *label* shown for it is the
+    same best-effort guess as the header.
+  - **Confirmed against a real league's board that this can be a genuinely unpredictable,
+    repeating reshuffle** — not a one-time thing, and not Sleeper's documented `reversal_round`
+    setting (checked the raw draft JSON for this app's own test league: `reversal_round` was `0`
+    /disabled, yet the live board still showed a different team-per-column mapping every 2
+    rounds). Comparing column contents round-by-round on a real Sleeper board: rounds 5&6 had an
+    identical mapping, 7&8 had an identical mapping, but 4→5, 6→7, and 8→9 each changed. Whatever
+    generates this isn't exposed anywhere in `/draft/{id}`'s settings — there is no way to
+    predict a future, not-yet-reached round's mapping. Every undrafted grid cell is explicitly
+    labeled as an unconfirmed guess (`.cell-team.guess`, dimmed) for exactly this reason — don't
+    "fix" that by making future cells look confirmed.
+- The suggestions query MUST use `PlayerPredictionRepository.findByPredictedSeasonWithPlayer()`
+  (a JOIN FETCH), not the plain `findByPredictedSeason()` — the plain version lazy-loads
+  `player`/`player.team` per row, meaning ~630 individual queries on every single poll (every
+  4s). Caused real, user-visible lag before this was caught.
 
 ---
 
@@ -335,10 +392,12 @@ Update these constants when a new season starts.
 - **ConsistencyStats**: Must be a standalone file at `ml/ConsistencyStats.java` — NOT a static inner class. Spring's class loader cannot find inner classes across packages.
 - **`games_played` in ML payload**: Comes from counting `PlayerWeeklyStat` rows, not stored in `PlayerStat`. If `countWeeksByPlayerForSeason` returns 0, points_per_game defaults to total_points (a bug symptom, not a bug itself).
 - **Maven incremental compile**: After editing Java files on Windows, run with `-Dmaven.compiler.useIncrementalCompilation=false` if changes aren't picked up. Or `touch` the source files. This can silently mask a real compile error: `./mvnw compile -q` reported clean success after a change that actually introduced a duplicate-variable error (a method parameter and a loop-local variable both named `owner` in `FantasyLeagueService.syncLeague`) — the stale pre-edit class was reused instead of recompiling. The error only surfaced at runtime once `spring-boot:run`'s devtools recompiled it for real, as `java.lang.Error: Unresolved compilation problem`. If a change compiles suspiciously cleanly, re-run with `-Dmaven.compiler.useIncrementalCompilation=false` to be sure.
+- **`ddl-auto: update` never drops or alters existing constraints, only adds new ones**: when `FantasyLeague.sleeperLeagueId` changed from a single-column `unique = true` to a compound `(sleeper_league_id, owner_id)` constraint (the private-per-user-leagues migration), Hibernate happily added the new compound constraint but left the old single-column one in place — nothing in the entity said to remove it. Silently broke the "two different users add the same real league" case with a `DataIntegrityViolationException` until the stale constraint was dropped manually (`\d fantasy_leagues` in psql to spot old constraints, then `ALTER TABLE ... DROP CONSTRAINT`). Check for this any time a uniqueness rule changes shape, not just when a column is added.
 - **Unicode in Python on Windows**: Use ASCII characters in print statements in train.py. `→` (U+2192) causes `UnicodeEncodeError` on Windows cmd with cp1252 encoding.
 - **Sleeper's `/players/nfl` is a live snapshot, not history**: `age` and `status` both come from this endpoint, which only ever returns *today's* values — there is no season-specific age/status in Sleeper's data. `SleeperService.upsertPlayer()` now derives `age` from the player's stored `birth_date` as-of Sept 1 of the season being synced (`ageForSeason()`), so re-syncing an old season no longer stamps today's age onto that historical row. `status` has no historical equivalent at all, so it is intentionally **not** a trained feature — it's only used as a prediction-time guardrail (discount for currently-injured/inactive players). Existing rows synced before this fix have `birth_date = NULL` and a stale `age` until re-synced.
 - **Don't log1p-transform the training target to fix elite-tier compression — tried it, made it worse**: Only ~2.5% of historical RB-seasons ever top 300 points, so the model badly under-projects breakout players (e.g. projected Jahmyr Gibbs/Bijan Robinson far below external consensus for 2026, despite both having a clear path to more touches). Wrapping the model in `TransformedTargetRegressor(func=np.log1p, inverse_func=np.expm1)` seemed like a fix, but `log1p` *shrinks* the loss's sensitivity to absolute gaps at the high end (log(400)-log(300) is small) while *inflating* it at the low end — it made the model care less about the tail, not more. Verified empirically: raw (pre-guardrail) output for Christian McCaffrey dropped to ~100 projected points. Reverted in `train.py`. The real fix needs a genuine roster-context feature (target share, backfield competition) — this model has no signal at all for "his backup left," which is the actual reason sites like Razzball project these players 35-40% higher than we do. See Future Work item 3.
 - **Legacy `Data_2024` CSV import left 1,079 orphaned duplicate rows**: predates the Sleeper sync pipeline (see the `./fantasy-football/Data_2024:/import` mount in docker-compose.yml). These had `players.season = NULL`, zero weekly stats, but a nonzero `total_points` — internally contradictory. `train.py`'s `MIN_GAMES` filter incidentally protected training data from them, but `MlPredictionService`'s `prev2StatMap` (keyed by `fullName|position`, no games-played guard) silently preferred whichever row loaded last, corrupting `prev2_points_per_game` to 0 for ~559 players. Cleaned up via one-time DB delete (`DELETE FROM player_stats/players WHERE season IS NULL` after confirming zero weekly-stat and zero-prediction references). If this pattern reappears after a future bulk import, check for `players.season IS NULL` first.
+- **FantasyCalculatorService silently returned empty ADP for a while**: Fantasy Football Calculator's Cloudflare-cached responses are sometimes mislabeled `Content-Type: text/html` even though the body is valid JSON. curl and Python's `urllib` don't care and parse it fine, but Spring's `RestTemplate.getForObject(url, SomeClass.class)` strictly validates Content-Type before picking an `HttpMessageConverter` and throws (caught, logged as a WARN, degrades to the cached/empty map) rather than deserializing. Fixed by fetching as `String` and parsing with a local `ObjectMapper` instead, bypassing content-type negotiation entirely. Worth knowing: this means `adp_trust` in Guardrail 5 was silently defaulting to a neutral 0.5 for every player for a while (the `fillna(0.5)` in serve.py never had real ADP to fill from) — after this fix, re-run "Sync AI Predictions" to get the real, differentiated trust signal instead of the flat default.
 
 ---
 
@@ -369,6 +428,8 @@ Update these constants when a new season starts.
 | GET | `/login` | Log in (Spring Security form login) |
 | POST | `/logout` | Log out |
 | GET/POST | `/profile` | Link/change your Sleeper username |
+| GET | `/draft/{draftId}` | Live draft board (any Sleeper draft id) |
+| GET | `/draft/{draftId}/data` | JSON polling endpoint for the board |
 
 ### ML Server (Python FastAPI, port 8000)
 | Method | Path | Purpose |

@@ -14,4 +14,7 @@ public interface FantasyLeagueRepository extends JpaRepository<FantasyLeague, Lo
 
     /** Ownership-scoped lookup for detail/sync/delete -- returns empty for another user's league. */
     Optional<FantasyLeague> findByIdAndOwner_Id(Long id, Long ownerId);
+
+    /** Used by the draft board to detect "does this draft belong to one of my synced leagues." */
+    Optional<FantasyLeague> findBySleeperDraftIdAndOwner_Id(String sleeperDraftId, Long ownerId);
 }

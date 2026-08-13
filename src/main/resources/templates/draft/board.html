@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live Draft</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .draft-grid { display: grid; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .draft-cell { position: relative; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 8px; font-size: 12px; min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
+        .draft-header { position: sticky; top: 0; z-index: 2; background: var(--card, #171b26); font-weight: 700; font-size: 12px; padding: 8px; text-align: center; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .draft-header:first-child { position: sticky; left: 0; z-index: 3; }
+        .draft-round-label { position: sticky; left: 0; z-index: 1; background: var(--card, #171b26); display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--muted); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+        .draft-cell.empty { color: var(--muted); font-style: italic; }
+        .draft-cell.on-clock { background: rgba(59,130,246,0.15); outline: 2px solid var(--brand); }
+        .draft-cell.mine { background: rgba(34,197,94,0.12); }
+        /* Small per-pick team label in the corner -- necessary (not just decorative) once a
+           league re-scrambles draft order after N rounds, since a column's real occupant can
+           differ from what the header guesses. Matches Sleeper's own convention for this. */
+        .cell-team { position: absolute; top: 2px; right: 4px; font-size: 9px; color: var(--muted); max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Undrafted cells only ever show a best guess, not a confirmed team -- dimmed on purpose
+           so it doesn't read as equally certain to a confirmed pick's label. */
+        .cell-team.guess { opacity: 0.55; font-style: italic; }
+        #gridWrap { max-height: 70vh; overflow-y: auto; }
+    </style>
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <span style="font-size:22px;">🏈</span>
+            <div>
+                <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
+                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;">Live Draft</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a th:href="@{/league}">League</a>
+            <a th:href="@{/predictions}">Predictions</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:12px;">
+        <h1 style="margin:0;">Live Draft</h1>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <span id="onClockBadge" class="btn primary" style="padding:6px 16px; font-size:12px; display:none;"></span>
+            <span id="statusBadge" class="btn" style="padding:5px 14px; font-size:12px;">…</span>
+        </div>
+    </div>
+    <p id="linkNote" class="muted" style="margin:0 0 20px; font-size:13px;"></p>
+
+    <!-- Draft board grid -->
+    <div class="card" style="margin-bottom:20px; overflow-x:auto;">
+        <div id="gridWrap"></div>
+    </div>
+
+    <!-- Available player suggestions -->
+    <div class="card">
+        <h2 style="margin:0 0 4px; font-size:1rem;">Available Players</h2>
+        <p class="muted" style="margin:0 0 14px; font-size:12px;">
+            Ranked by our projection (already ADP-aware) — ADP shown alongside for reference. Drafted players drop off automatically.
+        </p>
+        <div style="overflow-x:auto; max-height:520px; overflow-y:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead>
+                    <tr style="text-align:left; color:var(--muted); border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--card, #171b26);">
+                        <th style="padding:6px 8px;">#</th>
+                        <th style="padding:6px 8px;">Player</th>
+                        <th style="padding:6px 8px;">Pos</th>
+                        <th style="padding:6px 8px;">Team</th>
+                        <th style="padding:6px 8px; text-align:right;">Projected</th>
+                        <th style="padding:6px 8px; text-align:right;">ADP</th>
+                    </tr>
+                </thead>
+                <tbody id="suggestionsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
+    </div>
+</footer>
+
+<script th:inline="javascript">
+    const draftId = /*[[${draftId}]]*/ '';
+    const POLL_MS = 4000;
+
+    function esc(s) {
+        if (s === null || s === undefined) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function renderGrid(data) {
+        const numSlots = data.numSlots || 0;
+        const rounds = data.rounds || 15; // show every round, not a capped preview
+        const wrap = document.getElementById('gridWrap');
+
+        if (numSlots === 0) {
+            wrap.innerHTML = '<p class="muted" style="padding:16px;">No teams yet.</p>';
+            return;
+        }
+
+        let html = `<div class="draft-grid" style="grid-template-columns: 56px repeat(${numSlots}, minmax(120px, 1fr)); min-width:${56 + numSlots * 120}px;">`;
+
+        // Header row -- this is only a best-effort "who's here right now" guess, NOT a fixed
+        // team-per-column binding. A re-scrambled draft order (e.g. snake for 2 rounds then
+        // reshuffled -- confirmed against a real league's board: this can repeat every 2 rounds,
+        // and isn't predictable from any Sleeper draft setting) means a column's actual occupant
+        // can change. Every drafted cell below carries its own confirmed team label; every
+        // undrafted cell falls back to this same best-guess (whatever was last confirmed for that
+        // slot) since that's the best information available before the pick actually happens.
+        html += `<div class="draft-header"></div>`;
+        for (let s = 1; s <= numSlots; s++) {
+            html += `<div class="draft-header">${esc(data.slotHeaders[s - 1])}</div>`;
+        }
+
+        // Round rows -- look up each (round, slot) cell's pick directly, so a drafted cell's team
+        // is always that specific pick's own confirmed team, never assumed from column position.
+        for (let r = 1; r <= rounds; r++) {
+            html += `<div class="draft-round-label">R${r}</div>`;
+            for (let s = 1; s <= numSlots; s++) {
+                const pick = data.picks.find(p => p.round === r && p.slot === s);
+                const isClock = data.onClock && data.onClock.round === r && data.onClock.slot === s;
+                const cls = 'draft-cell' + (pick ? '' : ' empty') + (isClock ? ' on-clock' : '') + (pick && pick.isMine ? ' mine' : '');
+                const teamLabel = pick ? pick.team : data.slotHeaders[s - 1];
+                if (pick) {
+                    html += `<div class="${cls}" title="${esc(teamLabel)}">` +
+                            `<span class="cell-team">${esc(teamLabel)}</span>` +
+                            `<strong>${esc(pick.name)}</strong><span style="color:var(--muted);">${esc(pick.position)}</span></div>`;
+                } else {
+                    html += `<div class="${cls}" title="${esc(teamLabel)} (unconfirmed guess)">` +
+                            `<span class="cell-team guess">${esc(teamLabel)}</span>` +
+                            `${isClock ? 'On the clock' : ''}</div>`;
+                }
+            }
+        }
+        html += `</div>`;
+        wrap.innerHTML = html;
+    }
+
+    function render(data) {
+        document.getElementById('statusBadge').textContent = data.status;
+
+        const onClockEl = document.getElementById('onClockBadge');
+        if (data.onClock) {
+            onClockEl.style.display = '';
+            onClockEl.textContent = `Round ${data.onClock.round}, Pick ${data.onClock.pickNo}: ${data.onClock.isMine ? 'YOUR PICK' : data.onClock.label}`;
+        } else {
+            onClockEl.style.display = 'none';
+        }
+
+        document.getElementById('linkNote').textContent = data.linkedToLeague
+            ? 'Linked to one of your synced leagues — picks are being saved to that league\'s rosters as they happen.'
+            : 'Not linked to a synced league (e.g. a standalone mock draft) — showing live picks and suggestions only, nothing is being saved to a roster.';
+
+        renderGrid(data);
+
+        const body = document.getElementById('suggestionsBody');
+        body.innerHTML = '';
+        data.suggestions.forEach((p, i) => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border)';
+            tr.innerHTML = `<td style="padding:6px 8px;color:var(--muted);">${i + 1}</td>` +
+                            `<td style="padding:6px 8px;">${esc(p.name)}</td>` +
+                            `<td style="padding:6px 8px;color:var(--muted);">${esc(p.position)}</td>` +
+                            `<td style="padding:6px 8px;color:var(--muted);">${esc(p.team)}</td>` +
+                            `<td style="padding:6px 8px;text-align:right;">${p.projectedPoints != null ? p.projectedPoints.toFixed(1) : '—'}</td>` +
+                            `<td style="padding:6px 8px;text-align:right;color:var(--muted);">${p.adp != null ? p.adp.toFixed(1) : '—'}</td>`;
+            body.appendChild(tr);
+        });
+    }
+
+    async function poll() {
+        try {
+            const resp = await fetch(`/draft/${draftId}/data`);
+            if (!resp.ok) return;
+            render(await resp.json());
+        } catch (e) {
+            console.error('Draft poll failed', e);
+        }
+    }
+
+    poll();
+    setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>

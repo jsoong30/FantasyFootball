@@ -52,8 +52,10 @@
                 </p>
             </div>
             <div style="display:flex; gap:8px;">
+                <a th:if="${league.sleeperDraftId != null}" th:href="@{/draft/{draftId}(draftId=${league.sleeperDraftId})}"
+                   class="btn primary" style="padding:8px 18px; font-size:13px; text-decoration:none;">Live Draft</a>
                 <form th:action="@{/league/{id}/sync(id=${league.id})}" method="post">
-                    <button type="submit" class="btn primary" style="padding:8px 18px; font-size:13px;">Re-sync</button>
+                    <button type="submit" class="btn" style="padding:8px 18px; font-size:13px;">Re-sync</button>
                 </form>
                 <form th:action="@{/league/{id}/delete(id=${league.id})}" method="post"
                       onsubmit="return confirm('Delete this league? This removes all its synced teams and rosters.');">

@@ -8,7 +8,7 @@ import java.time.Instant;
  * An app account. Deliberately separate from "Sleeper identity" -- Sleeper has no login/OAuth
  * for third-party apps (it's a read-only public API), so we can't authenticate *as* a Sleeper
  * user. Instead each account holds a real password and, once linked, a cached Sleeper user id
- * used to resolve "is this your team" across every shared league (see LeagueController).
+ * used to resolve "is this your team" within that user's own leagues (see LeagueController).
  * <p>
  * Starting as an invite-free trusted-group signup (see SecurityConfig) but built so opening
  * registration to the public later doesn't need a data model change -- just a policy change
@@ -43,6 +43,11 @@ public class User {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    /** ADMIN can reach /admin/**. No self-service promotion -- set directly in the DB. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Role role = Role.USER;
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -64,6 +69,9 @@ public class User {
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+
+    public Role getRole() { return role; }
+    public void setRole(Role role) { this.role = role; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
