@@ -16,7 +16,10 @@ spring:
 
 ml:
   api:
-    url: ${ML_API_URL:http://localhost:8000}
+    # 127.0.0.1, not localhost -- on this machine "localhost" resolves to the IPv6 loopback
+    # (::1) first, but uvicorn's --host 0.0.0.0 only binds IPv4, so RestTemplate's calls got a
+    # bare "Connection refused" even though curl (which preferred IPv4) reached the server fine.
+    url: ${ML_API_URL:http://127.0.0.1:8000}
 
 fantasypros:
   api:

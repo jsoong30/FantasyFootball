@@ -62,27 +62,45 @@ public class FantasyCalculatorService {
         }
 
         String url = BASE + "/ppr?teams=" + teams + "&position=all";
-        try {
-            // FFC's Cloudflare-cached responses are sometimes mislabeled Content-Type: text/html
-            // even though the body is valid JSON -- curl/browsers don't care, but RestTemplate's
-            // getForObject() strictly validates Content-Type before picking a converter and fails
-            // to deserialize. Fetching as a raw String and parsing manually sidesteps that.
-            String body = restTemplate.getForObject(url, String.class);
-            AdpResponse resp = body != null ? objectMapper.readValue(body, AdpResponse.class) : null;
-            if (resp == null || resp.players == null) return cachedAdp;
+        // Retry once on failure -- a cold cache (right after app startup) plus one momentary
+        // network blip during the single fetch window otherwise loses this signal entirely for
+        // the rest of the cache TTL, which is exactly what happened diagnosing a "no route to
+        // host" blip that briefly took out several unrelated external calls at once.
+        Exception lastError = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                // FFC's Cloudflare-cached responses are sometimes mislabeled Content-Type:
+                // text/html even though the body is valid JSON -- curl/browsers don't care, but
+                // RestTemplate's getForObject() strictly validates Content-Type before picking a
+                // converter and fails to deserialize. Fetching as a raw String and parsing
+                // manually sidesteps that.
+                String body = restTemplate.getForObject(url, String.class);
+                AdpResponse resp = body != null ? objectMapper.readValue(body, AdpResponse.class) : null;
+                if (resp == null || resp.players == null) return cachedAdp;
 
-            Map<String, Double> result = new HashMap<>();
-            for (AdpPlayer p : resp.players) {
-                if (p.name == null || p.position == null) continue;
-                result.put(NameUtil.key(p.name, normalizePosition(p.position)), p.adp);
+                Map<String, Double> result = new HashMap<>();
+                for (AdpPlayer p : resp.players) {
+                    if (p.name == null || p.position == null) continue;
+                    result.put(NameUtil.key(p.name, normalizePosition(p.position)), p.adp);
+                }
+                log.info("Fetched ADP for {} players from Fantasy Football Calculator", result.size());
+                cachedAdp = result;
+                cachedAt = Instant.now();
+                return cachedAdp;
+            } catch (Exception e) {
+                lastError = e;
+                if (attempt == 1) sleepBriefly();
             }
-            log.info("Fetched ADP for {} players from Fantasy Football Calculator", result.size());
-            cachedAdp = result;
-            cachedAt = Instant.now();
-            return cachedAdp;
-        } catch (Exception e) {
-            log.warn("Could not fetch ADP from Fantasy Football Calculator", e);
-            return cachedAdp;
+        }
+        log.warn("Could not fetch ADP from Fantasy Football Calculator after retry", lastError);
+        return cachedAdp;
+    }
+
+    private static void sleepBriefly() {
+        try {
+            Thread.sleep(400);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
         }
     }
 

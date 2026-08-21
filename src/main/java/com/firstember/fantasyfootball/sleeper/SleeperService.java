@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.time.MonthDay;
 import java.time.format.DateTimeParseException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -54,6 +55,11 @@ public class SleeperService {
             "WSH", "WAS",   // Washington Commanders
             "LA",  "LAR"    // ESPN sometimes drops the R for the Rams
     );
+
+    // Bye weeks rarely change once ESPN publishes the season schedule, and computing them costs
+    // REGULAR_SEASON_WEEKS ESPN calls -- cached per season so the live draft board (polled every
+    // 4s) doesn't refetch the whole schedule on every poll.
+    private final Map<Integer, Map<String, Integer>> byeWeekCache = new ConcurrentHashMap<>();
 
     private final RestTemplate restTemplate;
     private final PlayerRepository playerRepository;
@@ -283,8 +289,24 @@ public class SleeperService {
      * teammate who left in the offseason simply won't appear in this season's live pull).
      */
     public Map<String, Integer> currentDepthChartOrders() {
+        // Retry once on failure -- a single momentary network blip during this one fetch
+        // otherwise silently drops this guardrail's input for the whole prediction sync (the
+        // caller's own try/catch just logs and moves on, same as the other market-signal
+        // fetches). Re-throws on a second failure so that existing caller-side handling applies.
+        Map<String, SleeperPlayerDTO> players;
+        try {
+            players = fetchAllPlayers();
+        } catch (Exception e) {
+            try {
+                Thread.sleep(400);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            players = fetchAllPlayers();
+        }
+
         Map<String, Integer> result = new HashMap<>();
-        fetchAllPlayers().forEach((sleeperId, dto) -> {
+        players.forEach((sleeperId, dto) -> {
             if (dto.getDepthChartOrder() != null) {
                 result.put(sleeperId, dto.getDepthChartOrder());
             }
@@ -430,6 +452,50 @@ public class SleeperService {
         w.setDefBlockedKicks(asNullableInt(raw, "blk_kick"));
         w.setPtsAllowed(asNullableInt(raw, "pts_allow"));
         return w;
+    }
+
+    /**
+     * Bye week per NFL team (our DB team codes) for the given season, derived from the ESPN
+     * schedule rather than fetched directly -- ESPN's scoreboard endpoint has no explicit "bye"
+     * field, but a team simply never appears in exactly one week's matchups. Cached per season;
+     * see {@link #byeWeekCache}.
+     */
+    public Map<String, Integer> byeWeeksByTeam(int year) {
+        // Not computeIfAbsent: a transient ESPN failure on the first call (a blip, rate limit,
+        // etc.) would otherwise cache an empty map forever, silently blanking byes for the rest
+        // of this JVM's life since nothing else ever invalidates the cache. Only cache real
+        // results so a bad first attempt just gets retried on the next poll.
+        Map<String, Integer> cached = byeWeekCache.get(year);
+        if (cached != null && !cached.isEmpty()) return cached;
+        Map<String, Integer> computed = computeByeWeeks(year);
+        if (!computed.isEmpty()) byeWeekCache.put(year, computed);
+        return computed;
+    }
+
+    private Map<String, Integer> computeByeWeeks(int year) {
+        Map<Integer, Set<String>> teamsPlayingByWeek = new LinkedHashMap<>();
+        Set<String> allTeams = new HashSet<>();
+        for (int week = 1; week <= REGULAR_SEASON_WEEKS; week++) {
+            Set<String> teams = fetchEspnScheduleForWeek(year, week).keySet();
+            teamsPlayingByWeek.put(week, teams);
+            allTeams.addAll(teams);
+        }
+
+        Map<String, Integer> byeWeeks = new HashMap<>();
+        for (String team : allTeams) {
+            for (Map.Entry<Integer, Set<String>> entry : teamsPlayingByWeek.entrySet()) {
+                if (!entry.getValue().contains(team)) {
+                    byeWeeks.put(team, entry.getKey());
+                    break;
+                }
+            }
+        }
+        return byeWeeks;
+    }
+
+    /** Sleeper's team abbreviation for a drafted player, normalized to our DB's team code. */
+    public String normalizeSleeperTeamCode(String rawSleeperCode) {
+        return rawSleeperCode != null ? TEAM_CODE_FIX.getOrDefault(rawSleeperCode, rawSleeperCode) : null;
     }
 
     /**

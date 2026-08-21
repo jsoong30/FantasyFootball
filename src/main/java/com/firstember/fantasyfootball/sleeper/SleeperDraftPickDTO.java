@@ -31,4 +31,6 @@ public class SleeperDraftPickDTO {
     }
 
     public String getPosition() { return metadata != null ? metadata.get("position") : null; }
+
+    public String getTeamCode() { return metadata != null ? metadata.get("team") : null; }
 }

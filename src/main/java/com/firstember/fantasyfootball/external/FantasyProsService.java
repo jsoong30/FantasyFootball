@@ -62,21 +62,40 @@ public class FantasyProsService {
 
         for (String position : POSITIONS) {
             String url = BASE + "/" + season + "/projections?position=" + position + "&scoring=PPR";
-            try {
-                ProjectionsResponse resp = restTemplate.exchange(
-                        url, HttpMethod.GET, entity, ProjectionsResponse.class).getBody();
-                if (resp == null || resp.players == null) continue;
-
-                for (ProjectedPlayer p : resp.players) {
-                    if (p.name == null || p.stats == null || p.stats.pointsPpr == null) continue;
-                    result.put(NameUtil.key(p.name, position), p.stats.pointsPpr);
+            // Retry once on failure -- see FantasyCalculatorService for why a single momentary
+            // network blip otherwise silently drops this guardrail's input for the whole sync.
+            Exception lastError = null;
+            boolean succeeded = false;
+            for (int attempt = 1; attempt <= 2 && !succeeded; attempt++) {
+                try {
+                    ProjectionsResponse resp = restTemplate.exchange(
+                            url, HttpMethod.GET, entity, ProjectionsResponse.class).getBody();
+                    if (resp != null && resp.players != null) {
+                        for (ProjectedPlayer p : resp.players) {
+                            if (p.name == null || p.stats == null || p.stats.pointsPpr == null) continue;
+                            result.put(NameUtil.key(p.name, position), p.stats.pointsPpr);
+                        }
+                    }
+                    succeeded = true;
+                } catch (Exception e) {
+                    lastError = e;
+                    if (attempt == 1) sleepBriefly();
                 }
-            } catch (Exception e) {
-                log.warn("Could not fetch FantasyPros projections for {}: {}", position, e.getMessage());
+            }
+            if (!succeeded) {
+                log.warn("Could not fetch FantasyPros projections for {}: {}", position, lastError.getMessage());
             }
         }
         log.info("Fetched consensus projections for {} players from FantasyPros", result.size());
         return result;
+    }
+
+    private static void sleepBriefly() {
+        try {
+            Thread.sleep(400);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     // ── Response DTOs ────────────────────────────────────────────────────────
