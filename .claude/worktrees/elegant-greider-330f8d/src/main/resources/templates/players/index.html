@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Players</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <span style="font-size:22px;">🏈</span>
+            <div>
+                <a th:href="@{/}" style="text-decoration:none;color:inherit;font-size:1.1rem;font-weight:800;letter-spacing:.3px;">FantasyFootball</a>
+                <div style="font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.3px;">2024 NFL · AI Predictions Coming</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a th:href="@{/players}" aria-current="page">Players</a>
+            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/stats}">Stats</a>
+            <a th:href="@{/predictions}">Predictions</a>
+            <a th:href="@{/players}" class="btn primary" style="margin-left:20px;padding:7px 16px;font-size:13px;">Get Started</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container" style="padding:24px 0;">
+    <h1 style="margin:0 0 10px;">Players</h1>
+    <p class="muted">Total: <span th:text="${playerCount}">0</span></p>
+
+    <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="pos-btn btn primary" data-pos="ALL" onclick="filterPos(this)">All</button>
+        <button class="pos-btn btn" data-pos="QB"  onclick="filterPos(this)">QB</button>
+        <button class="pos-btn btn" data-pos="RB"  onclick="filterPos(this)">RB</button>
+        <button class="pos-btn btn" data-pos="WR"  onclick="filterPos(this)">WR</button>
+        <button class="pos-btn btn" data-pos="TE"  onclick="filterPos(this)">TE</button>
+        <button class="pos-btn btn" data-pos="K"   onclick="filterPos(this)">K</button>
+        <button class="pos-btn btn" data-pos="DST" onclick="filterPos(this)">DST</button>
+    </div>
+
+    <div class="card" style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; min-width:500px;">
+            <thead>
+            <tr style="border-bottom:1px solid var(--border);">
+                <th style="text-align:left; padding:8px 6px;">Rank</th>
+                <th style="text-align:left; padding:8px 6px;">Name</th>
+                <th class="col-pos" style="text-align:left; padding:8px 6px;">Pos</th>
+                <th style="text-align:left; padding:8px 6px;">Team</th>
+                <th style="text-align:right; padding:8px 6px;">Pts</th>
+                <th class="col-passing" style="text-align:right; padding:8px 6px; display:none;">Pass Yds</th>
+                <th class="col-passing" style="text-align:right; padding:8px 6px; display:none;">Pass TD</th>
+                <th class="col-passing" style="text-align:right; padding:8px 6px; display:none;">INT</th>
+                <th class="col-rushing" style="text-align:right; padding:8px 6px; display:none;">Rush Yds</th>
+                <th class="col-rushing" style="text-align:right; padding:8px 6px; display:none;">Rush TD</th>
+                <th class="col-receiving" style="text-align:right; padding:8px 6px; display:none;">Targets</th>
+                <th class="col-receiving" style="text-align:right; padding:8px 6px; display:none;">Rec</th>
+                <th class="col-receiving" style="text-align:right; padding:8px 6px; display:none;">Rec Yds</th>
+                <th class="col-receiving" style="text-align:right; padding:8px 6px; display:none;">Rec TD</th>
+                <th class="col-kicking" style="text-align:right; padding:8px 6px; display:none;">PAT Made</th>
+                <th class="col-kicking" style="text-align:right; padding:8px 6px; display:none;">PAT Miss</th>
+                <th class="col-kicking" style="text-align:right; padding:8px 6px; display:none;">FG Made</th>
+            </tr>
+            </thead>
+            <tbody id="playerRows">
+            <tr th:each="p : ${players}" th:with="s=${statsMap[p.id]}"
+                th:attr="data-position=${p.position}"
+                style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 6px; color:var(--muted);"
+                    th:text="${s != null and s.rank != null ? s.rank : '—'}">1</td>
+                <td style="padding:8px 6px; font-weight:600;" th:text="${p.fullName}">Player Name</td>
+                <td class="col-pos" style="padding:8px 6px;">
+                    <span th:text="${p.position}" style="font-weight:700; color:var(--brand);">QB</span>
+                </td>
+                <td style="padding:8px 6px;" th:text="${p.team != null ? p.team.code : '—'}">KC</td>
+                <td style="padding:8px 6px; text-align:right; font-weight:600;"
+                    th:text="${s != null and s.totalPoints != null ? #numbers.formatDecimal(s.totalPoints,1,2) : '—'}">—</td>
+                <td class="col-passing" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.passingYds != null ? s.passingYds : '—'}">—</td>
+                <td class="col-passing" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.passingTd != null ? s.passingTd : '—'}">—</td>
+                <td class="col-passing" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.passingInt != null ? s.passingInt : '—'}">—</td>
+                <td class="col-rushing" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.rushingYds != null ? s.rushingYds : '—'}">—</td>
+                <td class="col-rushing" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.rushingTd != null ? s.rushingTd : '—'}">—</td>
+                <td class="col-receiving" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.targets != null ? s.targets : '—'}">—</td>
+                <td class="col-receiving" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.receivingRec != null ? s.receivingRec : '—'}">—</td>
+                <td class="col-receiving" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.receivingYds != null ? s.receivingYds : '—'}">—</td>
+                <td class="col-receiving" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.receivingTd != null ? s.receivingTd : '—'}">—</td>
+                <td class="col-kicking" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.patMade != null ? s.patMade : '—'}">—</td>
+                <td class="col-kicking" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.patMissed != null ? s.patMissed : '—'}">—</td>
+                <td class="col-kicking" style="padding:8px 6px; text-align:right; display:none;"
+                    th:text="${s != null and s.patMade != null ? s.totalFgMade() : '—'}">—</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(players)}">
+                <td colspan="5" class="muted" style="padding:12px 6px;">No players found.</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+<script>
+    const colGroups = {
+        'ALL': { pos:true,  passing:false, rushing:false, receiving:false, kicking:false },
+        'QB':  { pos:false, passing:true,  rushing:true,  receiving:false, kicking:false },
+        'RB':  { pos:false, passing:false, rushing:true,  receiving:true,  kicking:false },
+        'WR':  { pos:false, passing:false, rushing:false, receiving:true,  kicking:false },
+        'TE':  { pos:false, passing:false, rushing:false, receiving:true,  kicking:false },
+        'K':   { pos:false, passing:false, rushing:false, receiving:false, kicking:true  },
+        'DST': { pos:false, passing:false, rushing:false, receiving:false, kicking:false },
+    };
+    function setCols(group, visible) {
+        document.querySelectorAll('.' + group).forEach(el => el.style.display = visible ? '' : 'none');
+    }
+    function filterPos(btn) {
+        document.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('primary'));
+        btn.classList.add('primary');
+        const pos = btn.dataset.pos;
+        document.querySelectorAll('#playerRows tr[data-position]').forEach(row => {
+            row.style.display = (pos === 'ALL' || row.dataset.position === pos) ? '' : 'none';
+        });
+        const cols = colGroups[pos] || colGroups['ALL'];
+        setCols('col-pos',       cols.pos);
+        setCols('col-passing',   cols.passing);
+        setCols('col-rushing',   cols.rushing);
+        setCols('col-receiving', cols.receiving);
+        setCols('col-kicking',   cols.kicking);
+    }
+</script>
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>FantasyFootball</span>
+        <span th:text="'© ' + ${#dates.year(#dates.createNow())}">© 2024</span>
+    </div>
+</footer>
+</body>
+</html>

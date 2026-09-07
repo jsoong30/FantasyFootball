@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title th:text="${appName} + ' — Home'">FantasyFootball — Home</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <link rel="icon" th:href="@{/favicon.ico}">
+</head>
+<body>
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">
+            <!-- simple ball icon -->
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="logo"><circle cx="12" cy="12" r="10"/></svg>
+            <span th:text="${appName}">FantasyFootball</span>
+        </div>
+        <nav class="nav">
+            <a th:href="@{/players}">Players</a>
+            <a th:href="@{/teams}">Teams</a>
+            <a th:href="@{/stats}">Stats</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+    <section class="hero">
+        <div class="container hero-inner">
+            <div>
+                <h1>Track. Analyze. Win.</h1>
+                <p th:text="${welcomeMsg}">Welcome to your Fantasy Football Tracker!</p>
+                <div class="cta">
+                    <a class="btn primary" th:href="@{/players}">Browse Players</a>
+                    <a class="btn" th:href="@{/teams}">View Teams</a>
+                </div>
+            </div>
+            <div class="hero-card">
+                <div class="stat">
+                    <span class="num" th:text="${playerCount} ?: '—'">—</span>
+                    <span class="label">Players</span>
+                </div>
+                <div class="stat">
+                    <span class="num" th:text="${teamCount} ?: '—'">—</span>
+                    <span class="label">Teams</span>
+                </div>
+                <div class="stat">
+                    <span class="num" th:text="${weeksTracked} ?: '—'">—</span>
+                    <span class="label">Weeks Tracked</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid container">
+        <article class="card">
+            <h2>Players</h2>
+            <p>Search, filter, and drill into season and weekly performance.</p>
+            <a class="btn-link" th:href="@{/players}">Go to Players →</a>
+        </article>
+
+        <article class="card">
+            <h2>Teams</h2>
+            <p>Team rosters, depth charts, and positional breakdowns.</p>
+            <a class="btn-link" th:href="@{/teams}">Go to Teams →</a>
+        </article>
+
+        <article class="card">
+            <h2>Weekly Stats</h2>
+            <p>Week-by-week production to power your start/sit decisions.</p>
+            <a class="btn-link" th:href="@{/stats}">Go to Stats →</a>
+        </article>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <span>© <span th:text="${#dates.format(#dates.createNow(), 'yyyy')}">2025</span> First Ember</span>
+        <span class="muted">Built with Spring Boot + Thymeleaf</span>
+    </div>
+</footer>
+</body>
+</html>
