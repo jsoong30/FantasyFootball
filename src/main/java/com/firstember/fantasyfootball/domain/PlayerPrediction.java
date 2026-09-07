@@ -22,6 +22,21 @@ public class PlayerPrediction {
     @Column(name = "projected_points")
     private Double projectedPoints;
 
+    // Market context snapshotted at sync time so downstream features (e.g. week-by-week
+    // start/sit) can use it without re-hitting the rate-limited external APIs. All nullable —
+    // a player may have no ADP / no FantasyPros entry, and K/DST never get a market blend.
+    /** Our projection BEFORE serve.py's market-consensus blend (Guardrail 5). */
+    @Column(name = "model_points")
+    private Double modelPoints;
+
+    /** FantasyPros consensus PPR season projection used in the blend. */
+    @Column(name = "market_points")
+    private Double marketPoints;
+
+    /** Fantasy Football Calculator overall PPR ADP (lower = drafted earlier). */
+    @Column(name = "market_adp")
+    private Double marketAdp;
+
     public PlayerPrediction() {}
 
     public Long getId() { return id; }
@@ -34,4 +49,13 @@ public class PlayerPrediction {
 
     public Double getProjectedPoints() { return projectedPoints; }
     public void setProjectedPoints(Double projectedPoints) { this.projectedPoints = projectedPoints; }
+
+    public Double getModelPoints() { return modelPoints; }
+    public void setModelPoints(Double modelPoints) { this.modelPoints = modelPoints; }
+
+    public Double getMarketPoints() { return marketPoints; }
+    public void setMarketPoints(Double marketPoints) { this.marketPoints = marketPoints; }
+
+    public Double getMarketAdp() { return marketAdp; }
+    public void setMarketAdp(Double marketAdp) { this.marketAdp = marketAdp; }
 }

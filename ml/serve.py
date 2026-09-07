@@ -136,6 +136,11 @@ class PlayerPrediction(BaseModel):
     name: str
     position: str
     projected_points: Optional[float] = None
+    # The projection after the model + heuristic guardrails but BEFORE the market-consensus
+    # blend (Guardrail 5). Returned so the app can persist and show "our model vs the market"
+    # and how far the blend moved the final number. Equals projected_points when the blend
+    # doesn't fire (K/DST, or no FantasyPros number for the player).
+    model_points: Optional[float] = None
     error: Optional[str] = None
 
 
@@ -245,27 +250,37 @@ def predict_season(request: SeasonPredictionRequest) -> SeasonPredictionResponse
             elif player.depth_chart_order >= 3:
                 projected *= 0.92
 
+        # Snapshot before the market blend, for "model vs market" persistence (see response model).
+        model_points = projected
+
         # ── Guardrail 5: market consensus blend ─────────────────────────────────
         # FantasyPros' consensus projection is an even stronger version of the same idea as
         # Guardrail 4 -- it's forward-looking and bakes in whatever offseason story (departed
         # teammate, scheme change, injury recovery, breakout trajectory) is driving a player's
         # value, none of which any trained feature can see. Pulls toward market_points, scaled
         # by two things: (1) how big the gap actually is -- a player we're already close on
-        # barely moves, one we're way off on moves most of the way -- and (2) adp_trust, so a
-        # big gap only pulls hard when ADP (an independent source) backs it up; a single
-        # possibly-noisy FantasyPros number with no ADP support gets damped, not ignored.
+        # barely moves, one we're way off on moves most of the way -- and (2) how strongly the
+        # player's live ADP corroborates that gap (adp_trust). Two independent forward-looking
+        # sources agreeing is much stronger evidence than one, so strong ADP agreement is
+        # allowed to push the pull PAST the standalone 0.50 cap (up to 0.85); a lone,
+        # possibly-noisy FantasyPros number with no ADP support stays damped near the old level;
+        # an ADP that actively contradicts drags the pull toward zero.
         # Applied last and, like Guardrail 4, allowed to exceed +/-40% for the same reason.
         if player.position in ("QB", "RB", "WR", "TE") and player.market_points and player.market_points > 0:
             gap = (player.market_points - projected) / player.market_points
             base_weight = min(0.50, 1.25 * abs(gap))
-            adp_trust = float(df["adp_trust"].iloc[0])
-            weight = base_weight * (0.5 + 0.5 * adp_trust)
+            adp_trust = float(df["adp_trust"].iloc[0])   # 0..1; 0.5 == no ADP data for this player
+            # adp_factor: 0.75 at the no-ADP midpoint (== the old 0.5 + 0.5*adp_trust behaviour),
+            # ~1.53 when ADP strongly agrees (top of position), 0 when ADP strongly disagrees.
+            adp_factor = max(0.0, 0.75 + 1.6 * (adp_trust - 0.5))
+            weight = min(0.85, base_weight * adp_factor)
             projected = projected * (1 - weight) + player.market_points * weight
 
         predictions.append(PlayerPrediction(
             name=player.name,
             position=player.position,
             projected_points=round(projected, 2),
+            model_points=round(model_points, 2),
         ))
 
     return SeasonPredictionResponse(predictions=predictions)

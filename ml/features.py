@@ -198,11 +198,15 @@ def make_training_pairs(df: pd.DataFrame) -> pd.DataFrame:
     With 2020-2025 data this produces five pair sets:
       2020->21, 2021->22, 2022->23, 2023->24, 2024->25
     """
-    # Primary lag: season N stats paired with season N+1 target
+    # Primary lag: season N stats paired with season N+1 target.
+    # target_games_played rides along so train.py can down-weight (not drop) pairs whose target
+    # season was injury/bench-shortened — see train.py._sample_weights.
     targets = (
-        df[["full_name", "position", "season", "total_points"]]
+        df[["full_name", "position", "season", "total_points", "games_played"]]
         .copy()
-        .rename(columns={"total_points": "target_points", "season": "next_season"})
+        .rename(columns={"total_points": "target_points",
+                         "games_played": "target_games_played",
+                         "season": "next_season"})
     )
     pairs = df.merge(targets, on=["full_name", "position"])
     pairs = pairs[pairs["next_season"] == pairs["season"] + 1].copy()

@@ -15,6 +15,8 @@ public class SleeperPlayerDTO {
     @JsonProperty("age")         private Integer age;
     @JsonProperty("birth_date")  private String birthDate;
     @JsonProperty("status")      private String status;
+    @JsonProperty("injury_status")     private String injuryStatus;     // Questionable / Doubtful / Out / IR / PUP / Sus / null
+    @JsonProperty("injury_body_part")  private String injuryBodyPart;   // Knee / Hamstring / Undisclosed / null
     @JsonProperty("depth_chart_order") private Integer depthChartOrder;
     @JsonProperty("years_exp")   private Integer yearsExp;
 
@@ -27,6 +29,8 @@ public class SleeperPlayerDTO {
     public Integer getAge()              { return age; }
     public String getBirthDate()         { return birthDate; }
     public String getStatus()            { return status; }
+    public String getInjuryStatus()      { return injuryStatus; }
+    public String getInjuryBodyPart()    { return injuryBodyPart; }
     public Integer getDepthChartOrder()  { return depthChartOrder; }
     public Integer getYearsExp()         { return yearsExp; }
 }

@@ -18,11 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.MonthDay;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 @Service
@@ -57,9 +59,18 @@ public class SleeperService {
     );
 
     // Bye weeks rarely change once ESPN publishes the season schedule, and computing them costs
-    // REGULAR_SEASON_WEEKS ESPN calls -- cached per season so the live draft board (polled every
-    // 4s) doesn't refetch the whole schedule on every poll.
+    // REGULAR_SEASON_WEEKS sequential ESPN calls. The live draft board polls every 4s, so this is
+    // cached per season and computed single-flight: only one thread runs the ESPN calls at a time
+    // (others get whatever's cached, even empty, without blocking), and the outcome is cached
+    // either way -- a complete result kept for the season, an incomplete/empty one kept for a
+    // short cooldown before retry. (The old "only cache non-empty" rule meant a failing compute
+    // -- e.g. back when this hit the bot-gated site.api.espn.com and got 403s -- was relaunched
+    // by every single 4s poll, forever.)
+    private static final int NFL_TEAMS = 32;
+    private static final long BYE_RETRY_COOLDOWN_MS = 10 * 60 * 1000L;
     private final Map<Integer, Map<String, Integer>> byeWeekCache = new ConcurrentHashMap<>();
+    private final Map<Integer, Long> byeWeekComputedAt = new ConcurrentHashMap<>();
+    private final ReentrantLock byeWeekLock = new ReentrantLock();
 
     private final RestTemplate restTemplate;
     private final PlayerRepository playerRepository;
@@ -314,6 +325,51 @@ public class SleeperService {
         return result;
     }
 
+    /** A player's current injury designation from Sleeper (display only — see {@link #currentInjuryStatuses}). */
+    public record InjuryStatus(String designation, String bodyPart) {}
+
+    private static final Duration INJURY_CACHE_TTL = Duration.ofMinutes(5);
+    private volatile Map<String, InjuryStatus> cachedInjuries = Map.of();
+    private volatile Instant injuriesCachedAt = Instant.EPOCH;
+
+    /**
+     * Live injury designations (Sleeper's {@code injury_status}: "Questionable", "Doubtful",
+     * "Out", "IR", "PUP", ...) keyed by Sleeper player id (== our {@code Player.externalId}).
+     * <p>
+     * Snapshot only — Sleeper keeps no injury history — so, like {@code status} and
+     * {@code depth_chart_order}, this is a display/guardrail signal, never a trained feature.
+     * Cached for 5 minutes because the draft board polls every 4s and designations don't move
+     * minute to minute (mirrors {@code FantasyCalculatorService}'s ADP cache). Returns the last
+     * good map (or empty) on any failure — the badges it feeds are cosmetic.
+     */
+    public Map<String, InjuryStatus> currentInjuryStatuses() {
+        if (Duration.between(injuriesCachedAt, Instant.now()).compareTo(INJURY_CACHE_TTL) < 0) {
+            return cachedInjuries;
+        }
+        Map<String, SleeperPlayerDTO> players;
+        try {
+            players = fetchAllPlayers();
+        } catch (Exception e) {
+            log.warn("Could not fetch players for injury statuses, keeping cached: {}", e.getMessage());
+            return cachedInjuries;
+        }
+
+        Map<String, InjuryStatus> result = new HashMap<>();
+        players.forEach((sleeperId, dto) -> {
+            String designation = dto.getInjuryStatus();
+            if (designation != null && !designation.isBlank()) {
+                String bodyPart = dto.getInjuryBodyPart();
+                result.put(sleeperId, new InjuryStatus(
+                        designation.trim(),
+                        bodyPart != null && !bodyPart.isBlank() ? bodyPart.trim() : null));
+            }
+        });
+        cachedInjuries = result;
+        injuriesCachedAt = Instant.now();
+        log.info("Fetched {} live injury designations from Sleeper", result.size());
+        return cachedInjuries;
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /** GET /players/nfl → Map<sleeper_player_id, SleeperPlayerDTO> */
@@ -461,34 +517,68 @@ public class SleeperService {
      * see {@link #byeWeekCache}.
      */
     public Map<String, Integer> byeWeeksByTeam(int year) {
-        // Not computeIfAbsent: a transient ESPN failure on the first call (a blip, rate limit,
-        // etc.) would otherwise cache an empty map forever, silently blanking byes for the rest
-        // of this JVM's life since nothing else ever invalidates the cache. Only cache real
-        // results so a bad first attempt just gets retried on the next poll.
         Map<String, Integer> cached = byeWeekCache.get(year);
-        if (cached != null && !cached.isEmpty()) return cached;
-        Map<String, Integer> computed = computeByeWeeks(year);
-        if (!computed.isEmpty()) byeWeekCache.put(year, computed);
-        return computed;
+        if (cached != null && cached.size() >= NFL_TEAMS - 2) return cached;   // looks complete -- keep it
+
+        Long computedAt = byeWeekComputedAt.get(year);
+        boolean coolingDown = computedAt != null
+                && System.currentTimeMillis() - computedAt < BYE_RETRY_COOLDOWN_MS;
+
+        // Single-flight: only one thread does the ESPN calls. Everyone else (a concurrent poll,
+        // or a poll during the cooldown window) gets whatever's cached right now -- possibly an
+        // empty map, so byes render as "-" for a few seconds until the one computation lands.
+        if (coolingDown || !byeWeekLock.tryLock()) {
+            return cached != null ? cached : Map.of();
+        }
+        try {
+            Map<String, Integer> now = byeWeekCache.get(year);
+            if (now != null && now.size() >= NFL_TEAMS - 2) return now;
+            Map<String, Integer> computed = computeByeWeeks(year);
+            byeWeekCache.put(year, computed);
+            byeWeekComputedAt.put(year, System.currentTimeMillis());
+            return computed;
+        } finally {
+            byeWeekLock.unlock();
+        }
     }
 
     private Map<String, Integer> computeByeWeeks(int year) {
+        log.info("Computing bye weeks for {} from ESPN ({} sequential calls)...", year, REGULAR_SEASON_WEEKS);
         Map<Integer, Set<String>> teamsPlayingByWeek = new LinkedHashMap<>();
         Set<String> allTeams = new HashSet<>();
+        int weeksWithData = 0;
         for (int week = 1; week <= REGULAR_SEASON_WEEKS; week++) {
             Set<String> teams = fetchEspnScheduleForWeek(year, week).keySet();
+            if (!teams.isEmpty()) weeksWithData++;
             teamsPlayingByWeek.put(week, teams);
             allTeams.addAll(teams);
+        }
+        log.info("Bye-week compute for {}: {}/{} weeks returned data, {} teams seen",
+                year, weeksWithData, REGULAR_SEASON_WEEKS, allTeams.size());
+        if (allTeams.isEmpty()) {
+            log.warn("Bye-week compute for {} got zero schedule data from ESPN -- will retry after cooldown", year);
+            return Map.of();
         }
 
         Map<String, Integer> byeWeeks = new HashMap<>();
         for (String team : allTeams) {
             for (Map.Entry<Integer, Set<String>> entry : teamsPlayingByWeek.entrySet()) {
+                if (entry.getValue().isEmpty()) continue;   // a week that failed to fetch != a bye
                 if (!entry.getValue().contains(team)) {
                     byeWeeks.put(team, entry.getKey());
                     break;
                 }
             }
+        }
+
+        // Real NFL bye weeks hold at most ~6 teams. If one week is the "bye" for far more than
+        // that, the schedule we pulled had gaps that slipped past the per-week guard above --
+        // discard so the cooldown retries instead of caching garbage.
+        Map<Integer, Long> perWeek = byeWeeks.values().stream()
+                .collect(Collectors.groupingBy(w -> w, Collectors.counting()));
+        if (perWeek.values().stream().anyMatch(count -> count > 8)) {
+            log.warn("Bye-week compute for {} looks corrupt ({}) -- discarding", year, perWeek);
+            return Map.of();
         }
         return byeWeeks;
     }
@@ -511,44 +601,55 @@ public class SleeperService {
     }
 
     /**
-     * Fetch one week's matchups from ESPN's public scoreboard API (no key required).
+     * Fetch one week's matchups from ESPN (no key required).
      * Returns Map&lt;teamCode, opponentCode&gt; — both sides added so either team can be looked up.
      * Returns an empty map on any failure (network error, unexpected format, etc.).
-     *
-     * Example URL: https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard
-     *              ?seasontype=2&season=2024&week=1
+     * <p>
+     * Uses {@code cdn.espn.com/core/nfl/schedule}, NOT the older
+     * {@code site.api.espn.com/.../scoreboard}: the latter is fronted by Akamai Bot Manager,
+     * which 403s the JVM's HTTP client no matter what headers we send (it TLS-fingerprints the
+     * client), so byes and opponent codes were silently blanking. The cdn feed carries the same
+     * matchups in one call and isn't gated. Its shape is
+     * {@code content.schedule.{YYYYMMDD}.games[].competitions[0].competitors[].team.abbreviation}.
      */
     @SuppressWarnings("unchecked")
     private Map<String, String> fetchEspnScheduleForWeek(int year, int week) {
-        String url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-                   + "?seasontype=2&season=" + year + "&week=" + week;
+        String url = "https://cdn.espn.com/core/nfl/schedule?xhr=1&year=" + year
+                   + "&week=" + week + "&seasontype=2";
         try {
             Map<?, ?> body = restTemplate.getForObject(url, Map.class);
-            if (body == null) return Map.of();
+            Map<?, ?> content  = body != null ? (Map<?, ?>) body.get("content") : null;
+            Map<?, ?> schedule = content != null ? (Map<?, ?>) content.get("schedule") : null;
+            if (schedule == null) return Map.of();
 
-            List<?> events = (List<?>) body.get("events");
-            if (events == null) return Map.of();
+            Map<String, String> result = new HashMap<>();
+            for (Object dayObj : schedule.values()) {             // keyed by date string
+                Map<?, ?> day = (Map<?, ?>) dayObj;
+                List<?> games = (List<?>) day.get("games");
+                if (games == null) continue;
+                for (Object gameObj : games) {
+                    Map<?, ?> game = (Map<?, ?>) gameObj;
+                    List<?> competitions = (List<?>) game.get("competitions");
+                    Map<?, ?> competition = (competitions != null && !competitions.isEmpty())
+                            ? (Map<?, ?>) competitions.get(0) : game;
+                    List<?> competitors = (List<?>) competition.get("competitors");
+                    if (competitors == null || competitors.size() < 2) continue;
 
-            Map<String, String> schedule = new HashMap<>();
-            for (Object event : events) {
-                Map<?, ?> eventMap = (Map<?, ?>) event;
-                List<?> competitions = (List<?>) eventMap.get("competitions");
-                if (competitions == null || competitions.isEmpty()) continue;
-
-                Map<?, ?> competition = (Map<?, ?>) competitions.get(0);
-                List<?> competitors = (List<?>) competition.get("competitors");
-                if (competitors == null || competitors.size() < 2) continue;
-
-                String code1 = espnTeamAbbr((Map<?, ?>) competitors.get(0));
-                String code2 = espnTeamAbbr((Map<?, ?>) competitors.get(1));
-                if (code1 != null && code2 != null) {
-                    schedule.put(normalizeEspnCode(code1), normalizeEspnCode(code2));
-                    schedule.put(normalizeEspnCode(code2), normalizeEspnCode(code1));
+                    String code1 = espnTeamAbbr((Map<?, ?>) competitors.get(0));
+                    String code2 = espnTeamAbbr((Map<?, ?>) competitors.get(1));
+                    if (code1 != null && code2 != null) {
+                        result.put(normalizeEspnCode(code1), normalizeEspnCode(code2));
+                        result.put(normalizeEspnCode(code2), normalizeEspnCode(code1));
+                    }
                 }
             }
-            return schedule;
+            return result;
         } catch (Exception e) {
-            log.debug("ESPN schedule unavailable for {}/week {}: {}", year, week, e.getMessage());
+            // WARN (not DEBUG) because a silent failure here blanks the draft board's byes and
+            // opponent codes with no other symptom. computeByeWeeks is single-flight + cooldown,
+            // so this logs at most ~18 lines per 10 min, not once per 4s poll.
+            log.warn("ESPN schedule fetch failed for {}/week {}: {} — {}",
+                    year, week, e.getClass().getSimpleName(), e.getMessage());
             return Map.of();
         }
     }

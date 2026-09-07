@@ -200,7 +200,7 @@ public class MlPredictionService {
                         s -> s,
                         (a, b) -> a));
 
-        int saved = 0, errors = 0;
+        int saved = 0, errors = 0, withMarket = 0;
         for (Map<String, Object> pred : predictions) {
             String name     = (String)  pred.get("name");
             String position = (String)  pred.get("position");
@@ -219,13 +219,26 @@ public class MlPredictionService {
             entity.setPlayer(player);
             entity.setPredictedSeason(targetSeason);
             entity.setProjectedPoints(((Number) pts).doubleValue());
+
+            // Snapshot the market context that fed the blend, so later features (week-by-week
+            // start/sit) can read it straight from the DB instead of re-hitting the
+            // rate-limited FantasyPros / Fantasy Football Calculator APIs.
+            String marketKey = NameUtil.key(name, position);
+            Double marketAdp    = adpByKey.get(marketKey);
+            Double marketPoints = marketPointsByKey.get(marketKey);
+            Object modelPts     = pred.get("model_points");
+            entity.setMarketAdp(marketAdp);
+            entity.setMarketPoints(marketPoints);
+            entity.setModelPoints(modelPts != null ? ((Number) modelPts).doubleValue() : null);
+            if (marketPoints != null) withMarket++;
+
             predictionRepository.save(entity);
             saved++;
         }
 
         String msg = String.format(
-                "Predictions synced — %d saved, %d skipped (no model or missing player).",
-                saved, errors);
+                "Predictions synced — %d saved (%d with market consensus), %d skipped (no model or missing player).",
+                saved, withMarket, errors);
         log.info(msg);
         return msg;
     }

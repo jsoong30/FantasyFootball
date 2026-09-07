@@ -11,6 +11,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +41,11 @@ public class FantasyCalculatorService {
     // active, and ADP genuinely doesn't move meaningfully within a single draft session, so
     // there's no reason to hit FFC's API on every poll.
     private volatile Map<String, Double> cachedAdp = Map.of();
+    private volatile List<AdpEntry> cachedAdpEntries = List.of();
     private volatile Instant cachedAt = Instant.EPOCH;
+
+    /** One player's ADP row -- name/position/team plus the number. Position is normalized (DEF -> DST). */
+    public record AdpEntry(String name, String position, String team, double adp) {}
 
     public FantasyCalculatorService(RestTemplateBuilder builder) {
         this.restTemplate = builder
@@ -79,12 +84,16 @@ public class FantasyCalculatorService {
                 if (resp == null || resp.players == null) return cachedAdp;
 
                 Map<String, Double> result = new HashMap<>();
+                List<AdpEntry> entries = new ArrayList<>();
                 for (AdpPlayer p : resp.players) {
                     if (p.name == null || p.position == null) continue;
-                    result.put(NameUtil.key(p.name, normalizePosition(p.position)), p.adp);
+                    String pos = normalizePosition(p.position);
+                    result.put(NameUtil.key(p.name, pos), p.adp);
+                    if (p.adp != null) entries.add(new AdpEntry(p.name, pos, p.team, p.adp));
                 }
                 log.info("Fetched ADP for {} players from Fantasy Football Calculator", result.size());
                 cachedAdp = result;
+                cachedAdpEntries = entries;
                 cachedAt = Instant.now();
                 return cachedAdp;
             } catch (Exception e) {
@@ -94,6 +103,16 @@ public class FantasyCalculatorService {
         }
         log.warn("Could not fetch ADP from Fantasy Football Calculator after retry", lastError);
         return cachedAdp;
+    }
+
+    /**
+     * Same ADP data as {@link #currentAdp}, but as full rows (name/position/team/adp). For
+     * callers that need to surface players the market is drafting but we have no projection for
+     * (e.g. the current rookie class). Shares the same fetch + {@link #CACHE_TTL} cache.
+     */
+    public List<AdpEntry> currentAdpEntries(int teams) {
+        currentAdp(teams);   // refreshes cachedAdpEntries too when the cache is stale
+        return cachedAdpEntries;
     }
 
     private static void sleepBriefly() {

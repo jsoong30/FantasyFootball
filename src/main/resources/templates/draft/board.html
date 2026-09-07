@@ -7,10 +7,11 @@
     <link rel="stylesheet" th:href="@{/css/style.css}">
     <style>
         .draft-grid { display: grid; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-        .draft-cell { position: relative; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 8px; font-size: 12px; min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
-        .draft-header { position: sticky; top: 0; z-index: 2; background: var(--card, #171b26); font-weight: 700; font-size: 12px; padding: 8px; text-align: center; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .draft-cell { position: relative; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px 6px; font-size: 11px; min-height: 40px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+        .draft-cell strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .draft-header { position: sticky; top: 0; z-index: 2; background: var(--card, #171b26); font-weight: 700; font-size: 11px; padding: 6px 4px; text-align: center; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .draft-header:first-child { position: sticky; left: 0; z-index: 3; }
-        .draft-round-label { position: sticky; left: 0; z-index: 1; background: var(--card, #171b26); display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--muted); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+        .draft-round-label { position: sticky; left: 0; z-index: 1; background: var(--card, #171b26); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--muted); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
         .draft-cell.empty { color: var(--muted); font-style: italic; }
         .draft-cell.on-clock { background: rgba(59,130,246,0.15); outline: 2px solid var(--brand); }
         .draft-cell.mine { background: rgba(34,197,94,0.12); }
@@ -21,7 +22,12 @@
         /* Undrafted cells only ever show a best guess, not a confirmed team -- dimmed on purpose
            so it doesn't read as equally certain to a confirmed pick's label. */
         .cell-team.guess { opacity: 0.55; font-style: italic; }
-        #gridWrap { max-height: 70vh; overflow-y: auto; }
+        #gridWrap { max-height: 64vh; overflow-y: auto; overflow-x: auto; }
+        /* Sleeper-style: the board spans the full top, wider than the 1100px content column, so
+           all 12 teams fit without side-scroll on a normal screen. overflow-x on #gridWrap only
+           kicks in below the min-width fallback (narrow laptops / the mobile reset below). */
+        .draft-board { width: min(1440px, calc(100vw - 48px)); margin-left: 50%; transform: translateX(-50%); margin-bottom: 20px; }
+        @media (max-width: 900px) { .draft-board { width: auto; margin-left: 0; transform: none; } }
         .suggestion-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
         @media (max-width: 720px) { .suggestion-cards { grid-template-columns: 1fr; } }
         .suggestion-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--bg); }
@@ -33,11 +39,11 @@
         .suggestion-card .confidence-label { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
         .suggestion-card .stat-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 8px; }
         .need-tag { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 3px 9px; border-radius: 999px; background: rgba(59,130,246,0.15); color: var(--brand); margin-top: 10px; }
-        .draft-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+        /* My Team on the LEFT, the pick-suggestion stack on the right. */
+        .draft-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
         @media (max-width: 900px) { .draft-layout { grid-template-columns: 1fr; } }
-        /* Without this, a grid item won't shrink below its content's natural width, so the wide
-           draft-grid table (min-width scales with team count) blows out the whole column instead
-           of scrolling internally within its own card -- pushing the sidebar off-screen. */
+        /* Without this, a grid item won't shrink below its content's natural width, so a wide
+           table inside blows out the column instead of scrolling within its own card. */
         .draft-main { min-width: 0; }
         .draft-sidebar .card { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
         .my-team-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
@@ -59,6 +65,17 @@
         .pos-EMPTY { --pos-color: var(--muted); --pos-bg: rgba(148,163,184,0.10); }
         .pos-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; letter-spacing: .2px; color: var(--pos-color); background: var(--pos-bg); }
         .pos-text  { color: var(--pos-color); font-weight: 700; }
+
+        /* Live injury designation from Sleeper (injury_status). Amber = Questionable (may still
+           play), red = Out / Doubtful / IR / PUP / Sus (likely won't). Full text + body part in
+           the title tooltip. */
+        .inj-badge { display: inline-block; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 5px; letter-spacing: .3px; vertical-align: middle; margin-left: 5px; }
+        .inj-q   { color: #fbbf24; background: rgba(245,158,11,0.18); }
+        .inj-out { color: #f87171; background: rgba(239,68,68,0.18); }
+
+        /* Market-only suggestion: has an ADP but no projection of ours (typically this year's
+           rookies). Ranked by ADP alone -- badge makes clear it isn't model output. */
+        .adp-only-tag { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 5px; letter-spacing: .3px; vertical-align: middle; margin-left: 5px; color: var(--muted); background: rgba(148,163,184,0.16); border: 1px solid var(--border); }
     </style>
 </head>
 <body>
@@ -88,13 +105,28 @@
     </div>
     <p id="linkNote" class="muted" style="margin:0 0 20px; font-size:13px;"></p>
 
-    <div class="draft-layout">
-        <div class="draft-main">
-            <!-- Draft board grid -->
-            <div class="card" style="margin-bottom:20px; overflow-x:auto;">
-                <div id="gridWrap"></div>
-            </div>
+    <!-- Draft board grid -- full width across the top, Sleeper-style -->
+    <div class="draft-board">
+        <div class="card" style="padding:0; overflow:hidden;">
+            <div id="gridWrap"></div>
+        </div>
+    </div>
 
+    <div class="draft-layout">
+        <!-- My Team -- left column -->
+        <aside class="draft-sidebar">
+            <div class="card">
+                <h2 style="margin:0 0 4px; font-size:1rem;">My Team</h2>
+                <p class="muted" style="margin:0 0 10px; font-size:12px;">
+                    Players you've drafted so far, in pick order.
+                </p>
+                <div id="myUpcoming" class="muted" style="font-size:12px; margin:0 0 12px; line-height:1.5;" hidden></div>
+                <div id="myTeamList"></div>
+            </div>
+        </aside>
+
+        <!-- Pick suggestions -- right column -->
+        <div class="draft-main">
             <!-- Top-3 recommended picks, weighted by roster need -->
             <div class="card" style="margin-bottom:20px;">
                 <h2 style="margin:0 0 4px; font-size:1rem;">Who to Draft</h2>
@@ -130,17 +162,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- My Team -->
-        <aside class="draft-sidebar">
-            <div class="card">
-                <h2 style="margin:0 0 4px; font-size:1rem;">My Team</h2>
-                <p class="muted" style="margin:0 0 14px; font-size:12px;">
-                    Players you've drafted so far, in pick order.
-                </p>
-                <div id="myTeamList"></div>
-            </div>
-        </aside>
     </div>
 </main>
 
@@ -177,6 +198,25 @@
         return `<span class="pos-text ${posClass(pos)}">${esc(pos)}</span>`;
     }
 
+    // Live injury designation badge (Sleeper injury_status). '' when the player has none.
+    // Amber for Questionable, red for anything more serious. Full text + body part on hover.
+    const INJ_ABBR = { questionable: 'Q', doubtful: 'D', out: 'OUT' };
+    function injuryBadge(designation, bodyPart) {
+        if (!designation) return '';
+        const d = String(designation).trim();
+        const cls = /^q/i.test(d) ? 'inj-q' : 'inj-out';
+        const label = INJ_ABBR[d.toLowerCase()] || d.toUpperCase();
+        const title = bodyPart ? `${d} — ${bodyPart}` : d;
+        return `<span class="inj-badge ${cls}" title="${esc(title)}">${esc(label)}</span>`;
+    }
+
+    // "ADP" tag for market-only rows (has an ADP but no projection of ours; usually rookies).
+    function adpOnlyTag(p) {
+        return p && p.adpOnly
+            ? `<span class="adp-only-tag" title="Ranked by ADP only — no projection yet">ADP</span>`
+            : '';
+    }
+
     function renderGrid(data) {
         const numSlots = data.numSlots || 0;
         const rounds = data.rounds || 15; // show every round, not a capped preview
@@ -187,7 +227,9 @@
             return;
         }
 
-        let html = `<div class="draft-grid" style="grid-template-columns: 56px repeat(${numSlots}, minmax(120px, 1fr)); min-width:${56 + numSlots * 120}px;">`;
+        // Fluid team columns so the board fills the full-width block with no side-scroll on a
+        // normal screen; min-width is only a floor for narrow laptops (then #gridWrap scrolls x).
+        let html = `<div class="draft-grid" style="grid-template-columns: 34px repeat(${numSlots}, minmax(0, 1fr)); min-width:${34 + numSlots * 68}px;">`;
 
         // Header row -- this is only a best-effort "who's here right now" guess, NOT a fixed
         // team-per-column binding. A re-scrambled draft order (e.g. snake for 2 rounds then
@@ -205,17 +247,19 @@
         // is always that specific pick's own confirmed team, never assumed from column position.
         for (let r = 1; r <= rounds; r++) {
             html += `<div class="draft-round-label">R${r}</div>`;
+            const planned = data.plannedOrder && data.plannedOrder[r];   // team name by column, or undefined
             for (let s = 1; s <= numSlots; s++) {
                 const pick = data.picks.find(p => p.round === r && p.slot === s);
                 const isClock = data.onClock && data.onClock.round === r && data.onClock.slot === s;
                 const cls = 'draft-cell' + (pick ? '' : ' empty') + (isClock ? ' on-clock' : '') + (pick && pick.isMine ? ' mine' : '');
-                const teamLabel = pick ? pick.team : data.slotHeaders[s - 1];
+                const plannedTeam = planned ? planned[s - 1] : null;
+                const teamLabel = pick ? pick.team : (plannedTeam || data.slotHeaders[s - 1]);
                 if (pick) {
                     html += `<div class="${cls}" title="${esc(teamLabel)}">` +
                             `<span class="cell-team">${esc(teamLabel)}</span>` +
                             `<strong>${esc(pick.name)}</strong>${posText(pick.position)}</div>`;
                 } else {
-                    html += `<div class="${cls}" title="${esc(teamLabel)} (unconfirmed guess)">` +
+                    html += `<div class="${cls}" title="${esc(teamLabel)}${plannedTeam ? ' (planned order)' : ' (unconfirmed guess)'}">` +
                             `<span class="cell-team guess">${esc(teamLabel)}</span>` +
                             `${isClock ? 'On the clock' : ''}</div>`;
                 }
@@ -234,7 +278,7 @@
         wrap.innerHTML = topPicks.map((p, i) => `
             <div class="suggestion-card ${i === 0 ? 'rank-1' : ''}">
                 <div class="rank-tag">#${i + 1} Suggestion</div>
-                <div class="player-name">${esc(p.name)}</div>
+                <div class="player-name">${esc(p.name)}${injuryBadge(p.injuryStatus, p.injuryBodyPart)}${adpOnlyTag(p)}</div>
                 <div class="player-meta">${posBadge(p.position)} ${esc(p.team || '—')}</div>
                 <div class="confidence">${p.confidencePct.toFixed(1)}%</div>
                 <div class="confidence-label">confidence</div>
@@ -261,7 +305,7 @@
                 <span class="pos-badge my-team-pos-badge ${posClass(p ? p.position : null)}">${esc(row.slotLabel)}</span>
                 ${p ? `
                     <div class="my-team-player">
-                        <strong>${esc(p.name)}</strong>
+                        <strong>${esc(p.name)}</strong>${injuryBadge(p.injuryStatus, p.injuryBodyPart)}
                         <div class="muted" style="font-size:11px; margin-top:2px;">
                             ${esc(p.nflTeam || '—')}${p.byeWeek != null ? ' &middot; Bye ' + p.byeWeek : ''}
                         </div>
@@ -291,13 +335,25 @@
         renderTopPicks(data.topPicks);
         renderMyTeam(data.myTeam);
 
+        const upcomingEl = document.getElementById('myUpcoming');
+        const up = data.upcomingMyPicks || [];
+        if (up.length) {
+            upcomingEl.hidden = false;
+            const chips = up.map((p, i) =>
+                `<strong style="color:${i === 0 ? 'var(--brand)' : 'inherit'};">${p.round}.${p.posInRound}</strong> <span style="opacity:.7;">(#${p.pickNo})</span>`
+            ).join(' &nbsp;·&nbsp; ');
+            upcomingEl.innerHTML = `Your next picks: ${chips}`;
+        } else {
+            upcomingEl.hidden = true;
+        }
+
         const body = document.getElementById('suggestionsBody');
         body.innerHTML = '';
         data.suggestions.forEach((p, i) => {
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid var(--border)';
             tr.innerHTML = `<td style="padding:6px 8px;color:var(--muted);">${i + 1}</td>` +
-                            `<td style="padding:6px 8px;">${esc(p.name)}</td>` +
+                            `<td style="padding:6px 8px;">${esc(p.name)}${injuryBadge(p.injuryStatus, p.injuryBodyPart)}${adpOnlyTag(p)}</td>` +
                             `<td style="padding:6px 8px;">${posBadge(p.position)}</td>` +
                             `<td style="padding:6px 8px;color:var(--muted);">${esc(p.team)}</td>` +
                             `<td style="padding:6px 8px;text-align:right;">${p.projectedPoints != null ? p.projectedPoints.toFixed(1) : '—'}</td>` +
