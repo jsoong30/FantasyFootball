@@ -319,12 +319,26 @@ public class DraftController {
         // it's only the *team occupying* a slot that changes, not the traversal pattern. The team
         // LABEL is normally a best-effort header guess; when the custom-order override applies it's
         // the real team for that pick (and drives the "YOUR PICK" flag) — see customRoundOrder.
+        // The live draft is on the first pick_no that isn't filled yet -- NOT
+        // draftedPlayerIds.size()+1. Keeper picks are pre-placed at their designated pick_no
+        // with gaps around them (this league's 5th-round keepers land at pick_no 49-60 while
+        // rounds 1-4 are still being drafted), so counting total picks would put the board
+        // several picks ahead. "Smallest unfilled pick_no" handles them right: a keeper doesn't
+        // advance the clock, and once live picking reaches that round the clock jumps over the
+        // keeper-occupied slots. With only keepers placed, this is pick 1 -- nobody has picked yet.
+        int totalPicks = numSlots * totalRounds;
+        Set<Integer> takenPickNos = new HashSet<>();
+        for (SleeperDraftPickDTO p : picks) {
+            if (p.getPickNo() != null) takenPickNos.add(p.getPickNo());
+        }
+        int nextPickNo = 1;
+        while (nextPickNo <= totalPicks && takenPickNos.contains(nextPickNo)) nextPickNo++;
+
         int[] round1CustomOrder = customRoundOrder(draftId, 1, numSlots);
         Map<String, Object> onClock = null;
-        if (numSlots > 0 && draftedPlayerIds.size() < (long) numSlots * totalRounds) {
-            int pickNumber = draftedPlayerIds.size() + 1;
-            int round = (pickNumber - 1) / numSlots + 1;
-            int posInRound = (pickNumber - 1) % numSlots + 1;
+        if (numSlots > 0 && nextPickNo <= totalPicks) {
+            int round = (nextPickNo - 1) / numSlots + 1;
+            int posInRound = (nextPickNo - 1) % numSlots + 1;
             boolean snake = !"linear".equals(draft != null ? draft.getType() : null);
             int onClockSlot = (snake && round % 2 == 0) ? numSlots - posInRound + 1 : posInRound;
 
@@ -340,7 +354,7 @@ public class DraftController {
                 mineOnClock = "You".equals(label);
             }
             onClock = new LinkedHashMap<>();
-            onClock.put("pickNo", pickNumber);
+            onClock.put("pickNo", nextPickNo);
             onClock.put("round", round);
             onClock.put("slot", onClockSlot);
             onClock.put("label", label);
@@ -348,11 +362,12 @@ public class DraftController {
         }
 
         // The viewer's own upcoming picks (custom-order drafts only — pure pick-count arithmetic,
-        // independent of how Sleeper numbers draft_slot, so it's safe even mid-reshuffle).
+        // independent of how Sleeper numbers draft_slot, so it's safe even mid-reshuffle). Skips
+        // keeper-occupied pick_nos so a kept round-5 slot isn't listed as "upcoming".
         List<Map<String, Object>> upcomingMyPicks = new ArrayList<>();
         if (round1CustomOrder != null) {
-            int made = draftedPlayerIds.size();
-            for (int pn = made + 1; pn <= numSlots * totalRounds && upcomingMyPicks.size() < 6; pn++) {
+            for (int pn = nextPickNo; pn <= totalPicks && upcomingMyPicks.size() < 6; pn++) {
+                if (takenPickNos.contains(pn)) continue;
                 int r = (pn - 1) / numSlots + 1;
                 int pos = (pn - 1) % numSlots + 1;
                 int[] ord = customRoundOrder(draftId, r, numSlots);
