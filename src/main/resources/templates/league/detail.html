@@ -96,13 +96,13 @@
 
             <!-- Divisions -> selectable teams -->
             <nav>
-                <div class="division" th:each="div : ${teamsByDivision}">
+                <div class="division" th:each="divGroup : ${teamsByDivision}">
                     <h3 th:if="${hasDivisions}"
-                        th:text="${div.key == 0} ? 'No Division' : ('Division ' + ${div.key})">Division 1</h3>
+                        th:text="${divGroup.key == 0 ? 'No Division' : 'Division ' + divGroup.key}">Division 1</h3>
                     <h3 th:unless="${hasDivisions}">Teams</h3>
                     <button type="button" class="team-select"
-                            th:each="team : ${div.value}"
-                            th:classappend="${team.id == selectedTeamId} ? ' active' : ''"
+                            th:each="team : ${divGroup.value}"
+                            th:classappend="${team.id == selectedTeamId ? ' active' : ''}"
                             th:attr="data-team=${team.id}"
                             onclick="selectTeam(this)">
                         <span class="ts-name" th:text="${team.displayLabel}">Team Name</span>
@@ -116,15 +116,15 @@
             <section class="card">
                 <p th:if="${teams.isEmpty()}" class="muted" style="margin:0;">No teams synced yet.</p>
                 <div class="roster-view" th:each="team : ${teams}"
-                     th:id="'roster-' + ${team.id}"
+                     th:id="${'roster-' + team.id}"
                      th:hidden="${team.id != selectedTeamId}">
                     <h2 th:text="${team.displayLabel}">Team Name</h2>
                     <div class="rv-meta">
                         <span th:text="${team.ownerDisplayName}">owner</span>
                         <span> · </span>
                         <span th:text="${(team.wins ?: 0) + '-' + (team.losses ?: 0) + (team.ties != null and team.ties > 0 ? ('-' + team.ties) : '')}">0-0</span>
-                        <span th:if="${team.division != null}" th:text="' · Division ' + ${team.division}"></span>
-                        <span th:text="' · ' + ${rosterDisplay.get(team.id).size()} + ' players'"></span>
+                        <span th:if="${team.division != null}" th:text="${' · Division ' + team.division}"></span>
+                        <span th:text="${' · ' + rosterDisplay.get(team.id).size() + ' players'}"></span>
                     </div>
                     <p th:if="${rosterDisplay.get(team.id).isEmpty()}"
                        style="font-size:13px; color:var(--muted); font-style:italic; margin:0;">
