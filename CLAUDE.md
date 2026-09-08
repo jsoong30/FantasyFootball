@@ -507,7 +507,12 @@ Update these constants when a new season starts.
 
 These were discussed but not yet implemented:
 
-1. Week-by-week predictions (`POST /predict/week` stub exists in serve.py)
+1. **Week-by-week predictions** (`POST /predict/week` stub exists in serve.py) — full plan +
+   phased checklist in [`docs/week-by-week-plan.md`](docs/week-by-week-plan.md). Key finding: the
+   `cdn.espn.com/core/nfl/schedule` feed we already use for byes also carries betting odds
+   (spread / O/U), so implied team totals + a win % come free — no separate odds API. v1 is an
+   adjustment on top of the season `PlayerPrediction` (season/17 × matchup × usage × injury);
+   v2 is a per-position GBM on player-week rows.
 2. Injury/status signals — Sleeper returns `status` field on players
 3. Team offense context — target share, backfield splits
 4. ADP (Average Draft Position) integration
