@@ -5,6 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title th:text="${league != null} ? ${league.name} : 'League'">League</title>
     <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .league-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+        @media (max-width: 820px) { .league-body { grid-template-columns: 1fr; } }
+
+        .division { margin-bottom: 20px; }
+        .division:last-child { margin-bottom: 0; }
+        .division h3 { margin: 0 0 8px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .7px; color: var(--muted); }
+        .team-select { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+            background: var(--card, #171b26); border: 1px solid var(--border); border-radius: 10px;
+            padding: 9px 12px; margin-bottom: 6px; color: var(--text); cursor: pointer; font: inherit; }
+        .team-select:hover { border-color: var(--muted); }
+        .team-select.active { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
+        .team-select .ts-name { font-weight: 600; font-size: 13px; flex: 1 1 auto; min-width: 0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .team-select .ts-rec { flex: 0 0 auto; font-size: 12px; color: var(--muted); }
+        .you-pill { flex: 0 0 auto; font-size: 9px; font-weight: 800; letter-spacing: .5px;
+            padding: 2px 6px; border-radius: 5px; background: var(--brand); color: #fff; }
+
+        .roster-view h2 { margin: 0 0 3px; font-size: 1.15rem; }
+        .roster-view .rv-meta { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+        .roster-list { list-style: none; margin: 0; padding: 0; }
+        .roster-list li { display: flex; justify-content: space-between; align-items: center;
+            gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+        .roster-list li:last-child { border-bottom: none; }
+        .pos-chip { flex: 0 0 auto; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+            color: var(--muted); background: rgba(148,163,184,0.15); }
+    </style>
 </head>
 <body>
 <header class="site-header">
@@ -64,38 +92,63 @@
             </div>
         </div>
 
-        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px;">
-            <div class="card" th:each="team : ${teams}"
-                 th:style="${mineMap.get(team.id)} ? 'border-color:var(--brand);' : ''">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-                    <div>
-                        <div style="font-weight:700; font-size:1rem;" th:text="${team.displayLabel}">Team Name</div>
-                        <div style="font-size:12px; color:var(--muted);" th:text="${team.ownerDisplayName}">owner</div>
+        <div class="league-body">
+
+            <!-- Divisions -> selectable teams -->
+            <nav>
+                <div class="division" th:each="div : ${teamsByDivision}">
+                    <h3 th:if="${hasDivisions}"
+                        th:text="${div.key == 0} ? 'No Division' : ('Division ' + ${div.key})">Division 1</h3>
+                    <h3 th:unless="${hasDivisions}">Teams</h3>
+                    <button type="button" class="team-select"
+                            th:each="team : ${div.value}"
+                            th:classappend="${team.id == selectedTeamId} ? ' active' : ''"
+                            th:attr="data-team=${team.id}"
+                            onclick="selectTeam(this)">
+                        <span class="ts-name" th:text="${team.displayLabel}">Team Name</span>
+                        <span class="you-pill" th:if="${mineMap.get(team.id)}">YOU</span>
+                        <span class="ts-rec" th:text="${(team.wins ?: 0) + '-' + (team.losses ?: 0) + (team.ties != null and team.ties > 0 ? ('-' + team.ties) : '')}">0-0</span>
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Selected team's roster -->
+            <section class="card">
+                <p th:if="${teams.isEmpty()}" class="muted" style="margin:0;">No teams synced yet.</p>
+                <div class="roster-view" th:each="team : ${teams}"
+                     th:id="'roster-' + ${team.id}"
+                     th:hidden="${team.id != selectedTeamId}">
+                    <h2 th:text="${team.displayLabel}">Team Name</h2>
+                    <div class="rv-meta">
+                        <span th:text="${team.ownerDisplayName}">owner</span>
+                        <span> · </span>
+                        <span th:text="${(team.wins ?: 0) + '-' + (team.losses ?: 0) + (team.ties != null and team.ties > 0 ? ('-' + team.ties) : '')}">0-0</span>
+                        <span th:if="${team.division != null}" th:text="' · Division ' + ${team.division}"></span>
+                        <span th:text="' · ' + ${rosterDisplay.get(team.id).size()} + ' players'"></span>
                     </div>
-                    <span th:if="${mineMap.get(team.id)}" class="btn primary"
-                          style="padding:3px 10px; font-size:11px; pointer-events:none;">YOU</span>
+                    <p th:if="${rosterDisplay.get(team.id).isEmpty()}"
+                       style="font-size:13px; color:var(--muted); font-style:italic; margin:0;">
+                        No roster yet — syncs automatically once your draft happens.
+                    </p>
+                    <ul class="roster-list" th:unless="${rosterDisplay.get(team.id).isEmpty()}">
+                        <li th:each="p : ${rosterDisplay.get(team.id)}">
+                            <span th:text="${p.fullName}">Player Name</span>
+                            <span class="pos-chip" th:text="${p.position}">POS</span>
+                        </li>
+                    </ul>
                 </div>
-
-                <div style="font-size:13px; color:var(--muted); margin-bottom:10px;">
-                    <span th:text="${(team.wins ?: 0) + '-' + (team.losses ?: 0) + (team.ties != null and team.ties > 0 ? ('-' + team.ties) : '')}">0-0</span>
-                    <span th:if="${team.division != null}" th:text="'· Division ' + ${team.division}"></span>
-                </div>
-
-                <div th:if="${rosterDisplay.get(team.id).isEmpty()}"
-                     style="font-size:12px; color:var(--muted); font-style:italic;">
-                    No roster yet — syncs automatically once your draft happens.
-                </div>
-                <ul th:unless="${rosterDisplay.get(team.id).isEmpty()}"
-                    style="list-style:none; margin:0; padding:0; font-size:13px; display:flex; flex-direction:column; gap:4px;">
-                    <li th:each="p : ${rosterDisplay.get(team.id)}" style="display:flex; justify-content:space-between;">
-                        <span th:text="${p.fullName}">Player Name</span>
-                        <span style="color:var(--muted);" th:text="${p.position}">POS</span>
-                    </li>
-                </ul>
-            </div>
+            </section>
         </div>
     </div>
 </main>
+
+<script>
+    function selectTeam(btn) {
+        const id = btn.getAttribute('data-team');
+        document.querySelectorAll('.team-select').forEach(b => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.roster-view').forEach(v => { v.hidden = (v.id !== 'roster-' + id); });
+    }
+</script>
 
 <footer class="site-footer">
     <div class="container footer-inner">

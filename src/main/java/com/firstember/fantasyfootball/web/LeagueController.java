@@ -14,10 +14,12 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Every league here is private to whoever added it -- see {@link FantasyLeague}'s javadoc for
@@ -27,6 +29,9 @@ import java.util.Map;
 @Controller
 @RequestMapping("/league")
 public class LeagueController {
+
+    /** Football-conventional roster order, so a team's players read QB → DST rather than alphabetically. */
+    private static final List<String> POSITION_ORDER = List.of("QB", "RB", "WR", "TE", "K", "DST");
 
     private final FantasyLeagueRepository leagueRepository;
     private final FantasyTeamRepository teamRepository;
@@ -105,15 +110,37 @@ public class LeagueController {
                     .map(FantasyRosterPlayer::getSleeperPlayerId)
                     .map(playerRepository::findFirstByExternalIdOrderBySeasonDesc)
                     .flatMap(java.util.Optional::stream)
-                    .sorted(Comparator.comparing(Player::getPosition))
+                    .sorted(Comparator.comparingInt((Player p) -> {
+                                int i = POSITION_ORDER.indexOf(p.getPosition());
+                                return i < 0 ? POSITION_ORDER.size() : i;
+                            })
+                            .thenComparing(Player::getFullName))
                     .toList();
             rosterDisplay.put(team.getId(), players);
         }
+
+        // Group teams by division for the detail view (0 = no division). TreeMap -> ascending order.
+        boolean hasDivisions = teams.stream().anyMatch(t -> t.getDivision() != null);
+        Map<Integer, List<FantasyTeam>> teamsByDivision = new TreeMap<>();
+        for (FantasyTeam t : teams) {
+            teamsByDivision.computeIfAbsent(t.getDivision() != null ? t.getDivision() : 0,
+                    k -> new ArrayList<>()).add(t);
+        }
+
+        // The roster panel opens on the viewer's own team, falling back to the top of the standings.
+        Long selectedTeamId = teams.stream()
+                .filter(t -> Boolean.TRUE.equals(mineMap.get(t.getId())))
+                .map(FantasyTeam::getId)
+                .findFirst()
+                .orElse(teams.isEmpty() ? null : teams.get(0).getId());
 
         model.addAttribute("league", league);
         model.addAttribute("teams", teams);
         model.addAttribute("rosterDisplay", rosterDisplay);
         model.addAttribute("mineMap", mineMap);
+        model.addAttribute("teamsByDivision", teamsByDivision);
+        model.addAttribute("hasDivisions", hasDivisions);
+        model.addAttribute("selectedTeamId", selectedTeamId);
         return "league/detail";
     }
 }
