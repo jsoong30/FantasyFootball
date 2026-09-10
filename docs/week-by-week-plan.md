@@ -84,16 +84,62 @@ live in the range, not the point estimate.
 
 ---
 
-## Sync jobs (today everything is a manual admin button)
+## Automation & data freshness
 
-- **Sync current NFL week**: `SleeperService.syncWeek(year, week, "regular")` + opponent codes
-  already exist and `/admin/sync-week` is wired — need a scheduler (Spring `@Scheduled`, ~Tue AM)
-  or a "sync live week" button that auto-targets the current week.
-- **League roster re-sync**: `syncLeague` already picks up waiver adds/drops on re-sync — schedule
-  it (daily) and stamp `rostersLastSyncedAt`.
-- **Matchups + odds**: pull Sleeper `matchups/{week}` and ESPN odds (Thu), store.
-- **Recompute weekly projections**: after the above, for the current + next 1–2 weeks.
-- Laptop caveat: `@Scheduled` needs the app always-running; keep manual buttons as the fallback.
+Today **everything is a manual admin button** and several things are hardcoded. This makes
+rankings / stats / league / projections silently drift mid-season. Fixes, by priority.
+
+### P0 — foundational, small, unblocks the rest
+
+- [ ] **`SeasonConfig` bean** (`application.yml` props) to replace the hardcoded
+      `TARGET_SEASON = 2026` / `SOURCE_SEASON = 2025` copy-pasted in `PredictionsController`,
+      `HomeController`, `DraftController`. One place to roll the season.
+- [ ] **Current season/week from Sleeper `/state/nfl`** (keyless: `{season, week, season_type}`).
+      No date math; every scheduled job and UI default reads "we're in 2026 week 2" from here.
+- [ ] **`@EnableScheduling` + `SyncScheduler`**, gated by `app.scheduler.enabled` (off in
+      `application-local.yml` so a dev laptop doesn't hammer APIs). Each job's body is a service
+      method that is **also** an admin button — cron and button call the same code.
+
+### P1 — high value: keeps rankings / stats / projections current
+
+- [ ] **Weekly season sync** — Tue ~6am ET, run the full **`syncSeason(currentSeason)`**, NOT the
+      partial `syncWeek`. `syncSeason` is idempotent (~1–3 min; unplayed weeks return empty and
+      skip) and it's the only path that recomputes `PlayerStat` season totals **and**
+      `assignRanks`. Keep `syncWeek` only for the preseason dry-run it was built for.
+- [ ] **Nightly league roster sync** — `syncLeague` for every added `FantasyLeague` (already
+      idempotent, already picks up waiver adds/drops). Add `FantasyLeague.rostersLastSyncedAt`
+      and show "synced X ago" on `/league/{id}`.
+- [ ] **Weekly re-run predictions** — `syncPredictions(source, target)` with **no retrain**. The
+      season *model* barely moves week to week, but Guardrails 3–5 (status discount, depth-chart
+      nudge, ADP/FantasyPros blend) use *live* data, so a weekly re-predict keeps situational
+      adjustments (Gibbs/Bijan-style) fresh for free.
+- [ ] **`POST /reload-models` on `serve.py`** — `uvicorn --reload` watches `.py`, not `.pkl`, so a
+      retrain currently needs a manual server bounce. A 5-line endpoint re-running `_load_models()`
+      removes that step and lets a future retrain job chain cleanly.
+- [ ] **Persist ranks that are currently on-the-fly / missing**: positional rank on `PlayerStat`
+      (compute in `assignRanks`; `PlayersController.detail` recomputes it every request), and a
+      `rank` column on `PlayerWeeklyStat` (rank within that week, set during sync — feeds the
+      weekly model's usage features and "boom week" views).
+- [ ] **Auto-write `ml/data/fantasy_stats_all.csv` + `fantasy_weekly_all.csv`** as part of the
+      weekly sync job (reuse the export logic, write to file instead of HTTP response), so a
+      retrain is always just `py train.py`. **Do not auto-retrain the season model** — eyeballing
+      the walk-forward eval MAE before trusting a new model is a judgment step. (The *weekly*
+      model, once it exists, is the thing that should retrain on a schedule.)
+
+### P2 — later / nice-to-have
+
+- [ ] **Projected-vs-actual logging** each week (baseline: season projection prorated to /17) →
+      in-season MAE. Same `WeeklyProjectionAccuracy` table the weekly model's Phase 3 needs.
+- [ ] **Retry + surface failures** — Sleeper posts a week's stats ~Tue after MNF; if the sync
+      returns "No stats available yet", retry a few hours later. Show last-run status per job on
+      `/admin/sync` (a `SyncRun`/`SyncLog` row, or at least timestamps).
+- [ ] **Matchups + odds job** — Thu, pull Sleeper `matchups/{week}` + ESPN odds, store. (Also a
+      Phase 0 item for the weekly-projection feature.)
+- [ ] **Weekly projection recompute job** — after the sync + matchups land, for the current +
+      next 1–2 weeks. (Depends on the weekly model existing.)
+- **Reliability caveat**: unattended `@Scheduled` needs the app (and Docker Postgres, and uvicorn
+  for predict) always up — really wants a small always-on host, not a laptop. Decide this before
+  leaning on the scheduler; the manual buttons stay as the fallback either way.
 
 ---
 
@@ -149,11 +195,11 @@ live in the range, not the point estimate.
 ## Checklist
 
 ### Phase 0 — data plumbing
+> The sync automation (weekly season sync, nightly roster sync, `SeasonConfig`, `/state/nfl`,
+> matchups+odds job) lives in **Automation & data freshness** above — do P0/P1 there first.
 - [ ] Extend `fetchEspnScheduleForWeek` (or a sibling) to also return `spread` / `overUnder` per
       team → implied team totals.
 - [ ] `SleeperService.leagueMatchups(leagueId, week)` + `FantasyMatchup` entity + sync.
-- [ ] Scheduled / one-button "sync current NFL week" (weekly stats + opponent codes).
-- [ ] Scheduled daily league roster re-sync; `FantasyLeague.rostersLastSyncedAt` + show it.
 - [ ] Rolling-usage helper: L3/L4 snap %, target share, rush share, RZ touches from `PlayerWeeklyStat`.
 - [ ] Rolling DvP helper: PPR allowed to each position by each defense, season-to-date.
 - [ ] `PlayerWeeklyPrediction` entity + repo.
