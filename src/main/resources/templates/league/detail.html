@@ -76,7 +76,8 @@
                 <p class="muted" style="margin:0;">
                     <span th:text="${teams.size()}">12</span> teams ·
                     <span th:text="${league.status}">pre_draft</span> ·
-                    <span th:text="${league.season}">2026</span> season
+                    <span th:text="${league.season}">2026</span> season ·
+                    <span th:text="${syncedAgo}">never synced</span>
                 </p>
             </div>
             <div style="display:flex; gap:8px;">
@@ -107,7 +108,7 @@
                             onclick="selectTeam(this)">
                         <span class="ts-name" th:text="${team.displayLabel}">Team Name</span>
                         <span class="you-pill" th:if="${mineMap.get(team.id)}">YOU</span>
-                        <span class="ts-rec" th:text="${(team.wins ?: 0) + '-' + (team.losses ?: 0) + (team.ties != null and team.ties > 0 ? ('-' + team.ties) : '')}">0-0</span>
+                        <span class="ts-rec" th:text="${(team.wins ?: 0) + '-' + (team.losses ?: 0) + (team.ties != null and team.ties > 0 ? ('-' + team.ties) : '') + (team.pointsFor != null ? (' · ' + #numbers.formatDecimal(team.pointsFor, 1, 1)) : '')}">0-0</span>
                     </button>
                 </div>
             </nav>
@@ -123,6 +124,9 @@
                         <span th:text="${team.ownerDisplayName}">owner</span>
                         <span> · </span>
                         <span th:text="${(team.wins ?: 0) + '-' + (team.losses ?: 0) + (team.ties != null and team.ties > 0 ? ('-' + team.ties) : '')}">0-0</span>
+                        <span th:if="${team.pointsFor != null}"
+                              th:text="${' · ' + #numbers.formatDecimal(team.pointsFor, 1, 1) + ' PF'
+                                         + (team.pointsAgainst != null ? (' / ' + #numbers.formatDecimal(team.pointsAgainst, 1, 1) + ' PA') : '')}"></span>
                         <span th:if="${team.division != null}" th:text="${' · Division ' + team.division}"></span>
                         <span th:text="${' · ' + rosterDisplay.get(team.id).size() + ' players'}"></span>
                     </div>

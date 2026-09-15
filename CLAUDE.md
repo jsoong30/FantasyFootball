@@ -145,10 +145,14 @@ FantasyFootball/
   existence). Add/remove/re-sync from the `/league` page itself (paste a Sleeper league id), not
   via admin or config — `/admin` is being closed off from public access.
 - `FantasyTeam` = one roster slot (a team in a league): owner, custom team name (falls back to
-  Sleeper display name), record, division. It stores `ownerUserId` (Sleeper's, from the sync) but
+  Sleeper display name), record, division, and season-to-date `pointsFor`/`pointsAgainst`
+  (Sleeper splits these into a whole-number + `_decimal` settings field — see
+  `SleeperRosterDTO.getPointsFor()`). It stores `ownerUserId` (Sleeper's, from the sync) but
   **deliberately does not store "is this mine"** — see Authentication below for why that has to
   be resolved per-request instead (still needed even though leagues are private now — a league
   still has 11 other teams belonging to leaguemates who aren't you).
+- `FantasyLeague.rostersLastSyncedAt` — stamped on every `syncLeague()` call (manual or the
+  weekly auto-sync below); shown as "synced X ago" on `/league` and `/league/{id}`.
 - `FantasyRosterPlayer` stores the raw Sleeper player id, not a hard FK to `Player` — `Player` is
   season-indexed and a fantasy roster is a "right now" concept with no season of its own.
   Resolved to a display name/position at read time via `PlayerRepository.findFirstByExternalIdOrderBySeasonDesc()`.
@@ -263,6 +267,21 @@ py -m uvicorn serve:app --host 0.0.0.0 --port 8000 --reload
 - `GET /league/{id}` — teams/rosters detail view
 - Which team gets flagged "YOU" is per-viewer, from the logged-in user's linked Sleeper account
   (`/profile`) — see the Authentication section above, not a config value
+- **Auto-syncs weekly**: `LeagueSyncScheduler.scheduledSync()` (`@Scheduled`, cron
+  `app.scheduler.league-sync-cron`, default Tuesday 7am — after Sun/Mon games post final stats,
+  gated by `app.scheduler.enabled`, default true) calls its own `syncAllLeaguesNow()`, which
+  re-syncs *every* league *every* user has added (standings, scoring, rosters, status) — not
+  owner-scoped, since it's a background job over the whole table, not a per-request action.
+  `POST /admin/sync-leagues` (admin-only) runs the exact same method on demand.
+  `syncAllLeaguesNow()` calls `FantasyLeagueService.syncLeague()` per league as a genuine
+  cross-bean call (not from a method living on `FantasyLeagueService` itself) so each league gets
+  its own real `@Transactional` boundary — see that method's javadoc: a self-invoked call to
+  `syncLeague` would bypass its `@Transactional` proxy entirely, which breaks two things at once —
+  a JPA failure in one league could roll back every already-synced league sharing that
+  transaction, and (the one that actually throws) this job runs on a scheduler thread with no
+  HTTP request in flight, so `syncLeague`'s lazy fields (a team's roster players) need its own
+  live transaction to load without a `LazyInitializationException`. One bad league (deleted on
+  Sleeper, a network blip) is logged and skipped rather than aborting the batch.
 
 ### 9. Live Draft (`/draft/{sleeperDraftId}`)
 - Works against ANY Sleeper draft id, not just ones tied to a synced league — a standalone
@@ -478,6 +497,7 @@ Update these constants when a new season starts.
 | GET | `/admin/sync` | Admin panel |
 | POST | `/admin/sync?year=` | Trigger Sleeper sync |
 | POST | `/admin/sync-opponents?year=` | Backfill opponent_code via ESPN |
+| POST | `/admin/sync-leagues` | Re-sync every league for every user now (also runs weekly on a schedule) |
 | POST | `/admin/predict?sourceSeason=&targetSeason=` | Run ML prediction sync |
 | GET | `/admin/export` | Download season stats CSV |
 | GET | `/admin/export?year=` | Download single-season CSV |

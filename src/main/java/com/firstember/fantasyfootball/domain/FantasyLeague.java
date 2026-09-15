@@ -2,6 +2,7 @@ package com.firstember.fantasyfootball.domain;
 
 import jakarta.persistence.*;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,6 +44,10 @@ public class FantasyLeague {
     @Column(name = "sleeper_draft_id")
     private String sleeperDraftId;
 
+    /** Last time teams/rosters/records were synced from Sleeper (manual or scheduled). */
+    @Column(name = "rosters_last_synced_at")
+    private Instant rostersLastSyncedAt;
+
     @OneToMany(mappedBy = "league", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FantasyTeam> teams = new ArrayList<>();
 
@@ -70,6 +75,9 @@ public class FantasyLeague {
 
     public String getSleeperDraftId() { return sleeperDraftId; }
     public void setSleeperDraftId(String sleeperDraftId) { this.sleeperDraftId = sleeperDraftId; }
+
+    public Instant getRostersLastSyncedAt() { return rostersLastSyncedAt; }
+    public void setRostersLastSyncedAt(Instant rostersLastSyncedAt) { this.rostersLastSyncedAt = rostersLastSyncedAt; }
 
     public List<FantasyTeam> getTeams() { return teams; }
     public void setTeams(List<FantasyTeam> teams) { this.teams = teams; }

@@ -25,6 +25,15 @@ fantasypros:
   api:
     key: ${FANTASY_PROS_API:}
 
+app:
+  scheduler:
+    # Turns off ALL @Scheduled jobs (currently just the weekly league auto-sync) without a code
+    # change -- e.g. set false via an env var if you don't want background jobs hitting Sleeper.
+    enabled: ${SCHEDULER_ENABLED:true}
+    # Cron for LeagueSyncScheduler: Tuesday 7am by default, after Sun/Mon (and MNF) games have
+    # posted final stats/standings. Spring cron format: second minute hour day-of-month month day-of-week.
+    league-sync-cron: ${LEAGUE_SYNC_CRON:0 0 7 * * TUE}
+
 
 
 

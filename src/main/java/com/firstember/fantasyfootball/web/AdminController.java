@@ -6,6 +6,7 @@ import com.firstember.fantasyfootball.ml.ConsistencyStats;
 import com.firstember.fantasyfootball.ml.MlPredictionService;
 import com.firstember.fantasyfootball.repo.PlayerStatRepository;
 import com.firstember.fantasyfootball.repo.PlayerWeeklyStatRepository;
+import com.firstember.fantasyfootball.sleeper.LeagueSyncScheduler;
 import com.firstember.fantasyfootball.sleeper.SleeperService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -29,15 +30,18 @@ public class AdminController {
     private final MlPredictionService mlPredictionService;
     private final PlayerStatRepository playerStatRepository;
     private final PlayerWeeklyStatRepository weeklyStatRepository;
+    private final LeagueSyncScheduler leagueSyncScheduler;
 
     public AdminController(SleeperService sleeperService,
                            MlPredictionService mlPredictionService,
                            PlayerStatRepository playerStatRepository,
-                           PlayerWeeklyStatRepository weeklyStatRepository) {
+                           PlayerWeeklyStatRepository weeklyStatRepository,
+                           LeagueSyncScheduler leagueSyncScheduler) {
         this.sleeperService = sleeperService;
         this.mlPredictionService = mlPredictionService;
         this.playerStatRepository = playerStatRepository;
         this.weeklyStatRepository = weeklyStatRepository;
+        this.leagueSyncScheduler = leagueSyncScheduler;
     }
 
     /** Show the admin sync page. */
@@ -102,6 +106,25 @@ public class AdminController {
         } catch (Exception e) {
             model.addAttribute("weekMessage", "Week sync failed: " + e.getMessage());
             model.addAttribute("weekSuccess", false);
+        }
+        model.addAttribute("message", null);
+        return "admin/sync";
+    }
+
+    /**
+     * Manually trigger the same league re-sync {@link LeagueSyncScheduler} runs weekly — every
+     * added league across every user: standings, scoring, rosters, status.
+     * POST /admin/sync-leagues
+     */
+    @PostMapping("/sync-leagues")
+    public String syncLeagues(Model model) {
+        try {
+            String result = leagueSyncScheduler.syncAllLeaguesNow();
+            model.addAttribute("leagueSyncMessage", result);
+            model.addAttribute("leagueSyncSuccess", true);
+        } catch (Exception e) {
+            model.addAttribute("leagueSyncMessage", "League sync failed: " + e.getMessage());
+            model.addAttribute("leagueSyncSuccess", false);
         }
         model.addAttribute("message", null);
         return "admin/sync";

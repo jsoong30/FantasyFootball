@@ -208,6 +208,35 @@
         </p>
     </div>
 
+    <!-- League auto-sync card -->
+    <div class="card" style="margin-top:28px;">
+        <h2 style="margin:0 0 8px; font-size:1.05rem;">Sync All Leagues</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 16px; line-height:1.6;">
+            Re-syncs every league every user has added — standings (wins/losses/ties), scoring
+            (points for/against), rosters, and league status. Runs automatically every
+            <strong>Tuesday at 7am</strong> (after Sunday/Monday games post final stats); this
+            button runs the exact same job on demand.
+        </p>
+
+        <!-- Result banner -->
+        <div th:if="${leagueSyncMessage != null}"
+             th:classappend="${leagueSyncSuccess} ? 'pred-banner-live' : ''"
+             class="pred-banner"
+             style="margin-bottom:16px;">
+            <span style="font-size:22px;" th:text="${leagueSyncSuccess} ? '✅' : '❌'">✅</span>
+            <div>
+                <strong th:text="${leagueSyncSuccess} ? 'League sync complete' : 'Sync failed'">Result</strong>
+                <p th:text="${leagueSyncMessage}">Details here.</p>
+            </div>
+        </div>
+
+        <form th:action="@{/admin/sync-leagues}" method="post">
+            <button type="submit" class="btn primary" style="padding:9px 22px;">
+                Sync All Leagues Now
+            </button>
+        </form>
+    </div>
+
     <!-- Export card -->
     <div class="card" style="margin-top:28px;">
         <h2 style="margin:0 0 8px; font-size:1.05rem;">Export Training Data</h2>

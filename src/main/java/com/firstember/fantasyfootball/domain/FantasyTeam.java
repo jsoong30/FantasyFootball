@@ -38,6 +38,13 @@ public class FantasyTeam {
     private Integer losses;
     private Integer ties;
 
+    /** Season-to-date scoring, from Sleeper's roster settings (fpts / fpts_against). */
+    @Column(name = "points_for")
+    private Double pointsFor;
+
+    @Column(name = "points_against")
+    private Double pointsAgainst;
+
     @OneToMany(mappedBy = "fantasyTeam", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FantasyRosterPlayer> rosterPlayers = new ArrayList<>();
 
@@ -71,6 +78,12 @@ public class FantasyTeam {
 
     public Integer getTies() { return ties; }
     public void setTies(Integer ties) { this.ties = ties; }
+
+    public Double getPointsFor() { return pointsFor; }
+    public void setPointsFor(Double pointsFor) { this.pointsFor = pointsFor; }
+
+    public Double getPointsAgainst() { return pointsAgainst; }
+    public void setPointsAgainst(Double pointsAgainst) { this.pointsAgainst = pointsAgainst; }
 
     public List<FantasyRosterPlayer> getRosterPlayers() { return rosterPlayers; }
     public void setRosterPlayers(List<FantasyRosterPlayer> rosterPlayers) { this.rosterPlayers = rosterPlayers; }

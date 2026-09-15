@@ -14,6 +14,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -51,7 +53,9 @@ public class LeagueController {
     /** List only leagues the current user added — pick one to view its teams, or add a new one. */
     @GetMapping
     public String list(@AuthenticationPrincipal AppUserPrincipal principal, Model model) {
-        model.addAttribute("leagues", leagueRepository.findByOwner_Id(principal.getUser().getId()));
+        List<FantasyLeague> leagues = leagueRepository.findByOwner_Id(principal.getUser().getId());
+        model.addAttribute("leagues", leagues);
+        model.addAttribute("syncedAgoMap", syncedAgoMap(leagues));
         model.addAttribute("addMessage", null);
         return "league/index";
     }
@@ -62,9 +66,17 @@ public class LeagueController {
                       @AuthenticationPrincipal AppUserPrincipal principal,
                       Model model) {
         String result = fantasyLeagueService.syncLeague(sleeperLeagueId.trim(), principal.getUser());
-        model.addAttribute("leagues", leagueRepository.findByOwner_Id(principal.getUser().getId()));
+        List<FantasyLeague> leagues = leagueRepository.findByOwner_Id(principal.getUser().getId());
+        model.addAttribute("leagues", leagues);
+        model.addAttribute("syncedAgoMap", syncedAgoMap(leagues));
         model.addAttribute("addMessage", result);
         return "league/index";
+    }
+
+    private Map<Long, String> syncedAgoMap(List<FantasyLeague> leagues) {
+        Map<Long, String> map = new LinkedHashMap<>();
+        for (FantasyLeague lg : leagues) map.put(lg.getId(), relativeTime(lg.getRostersLastSyncedAt()));
+        return map;
     }
 
     /** Re-sync one already-added league — only if it belongs to the current user. */
@@ -95,7 +107,8 @@ public class LeagueController {
         List<FantasyTeam> teams = teamRepository.findByLeague_IdOrderBySleeperRosterIdAsc(league.getId());
         teams.sort(Comparator
                 .comparing(FantasyTeam::getWins, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(FantasyTeam::getLosses, Comparator.nullsLast(Comparator.naturalOrder())));
+                .thenComparing(FantasyTeam::getLosses, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(FantasyTeam::getPointsFor, Comparator.nullsLast(Comparator.reverseOrder())));
 
         // Within your own private league, "is this MY team" still needs resolving per-viewer --
         // there are still 11 other teams belonging to leaguemates who aren't you.
@@ -141,6 +154,23 @@ public class LeagueController {
         model.addAttribute("teamsByDivision", teamsByDivision);
         model.addAttribute("hasDivisions", hasDivisions);
         model.addAttribute("selectedTeamId", selectedTeamId);
+        model.addAttribute("syncedAgo", relativeTime(league.getRostersLastSyncedAt()));
         return "league/detail";
+    }
+
+    /**
+     * Human-readable "synced X ago" for {@link FantasyLeague#getRostersLastSyncedAt()}. Computed
+     * here rather than in the template — Thymeleaf's temporal utilities don't handle
+     * {@code java.time.Instant} cleanly, and this is easier to get right in Java.
+     */
+    private static String relativeTime(Instant instant) {
+        if (instant == null) return "never synced";
+        long mins = Duration.between(instant, Instant.now()).toMinutes();
+        if (mins < 1) return "just now";
+        if (mins < 60) return "synced " + mins + " min ago";
+        long hours = mins / 60;
+        if (hours < 24) return "synced " + hours + " hr" + (hours == 1 ? "" : "s") + " ago";
+        long days = hours / 24;
+        return "synced " + days + " day" + (days == 1 ? "" : "s") + " ago";
     }
 }

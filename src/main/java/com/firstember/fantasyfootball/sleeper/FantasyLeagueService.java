@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,6 +105,8 @@ public class FantasyLeagueService {
             team.setWins(r.getSettingInt("wins"));
             team.setLosses(r.getSettingInt("losses"));
             team.setTies(r.getSettingInt("ties"));
+            team.setPointsFor(r.getPointsFor());
+            team.setPointsAgainst(r.getPointsAgainst());
 
             team.getRosterPlayers().clear();
             if (r.getPlayers() != null) {
@@ -120,6 +123,9 @@ public class FantasyLeagueService {
             teamRepository.save(team);
             teamsSaved++;
         }
+
+        league.setRostersLastSyncedAt(Instant.now());
+        leagueRepository.save(league);
 
         return String.format(
                 "League \"%s\" synced -- %d teams, %d rostered players (status: %s).",

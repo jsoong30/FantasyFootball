@@ -79,7 +79,9 @@ live in the range, not the point estimate.
   `win_prob`. Synced from Sleeper matchups endpoint.
 - `TeamWeeklyContext` (optional cache) — `(season, week, team_code)`; `opp_code`, `is_home`,
   `implied_total`, `spread`, `over_under`, `dvp_allowed_qb/rb/wr/te`. Avoids per-player recompute.
-- `FantasyLeague.rostersLastSyncedAt` (+ show "synced X ago" on `/league/{id}`).
+- [x] `FantasyLeague.rostersLastSyncedAt` (+ show "synced X ago" on `/league` and `/league/{id}`).
+  Also added `FantasyTeam.pointsFor`/`pointsAgainst` (Sleeper `fpts`/`fpts_against`) alongside it —
+  not originally scoped here, but the same sync pass and needed for "scoring" freshness too.
 - (v3) `WeeklyProjectionAccuracy` — projected vs actual per player-week, for MAE tracking + eval.
 
 ---
@@ -96,19 +98,33 @@ rankings / stats / league / projections silently drift mid-season. Fixes, by pri
       `HomeController`, `DraftController`. One place to roll the season.
 - [ ] **Current season/week from Sleeper `/state/nfl`** (keyless: `{season, week, season_type}`).
       No date math; every scheduled job and UI default reads "we're in 2026 week 2" from here.
-- [ ] **`@EnableScheduling` + `SyncScheduler`**, gated by `app.scheduler.enabled` (off in
-      `application-local.yml` so a dev laptop doesn't hammer APIs). Each job's body is a service
-      method that is **also** an admin button — cron and button call the same code.
+- [x] **`@EnableScheduling` + a scheduler bean**, gated by `app.scheduler.enabled` (default
+      **true** — deliberately on, not off, since this is a real single-user deploy, not a shared
+      dev box several people might run locally; flip to `false` via env var if that changes).
+      `LeagueSyncScheduler` is the first job; its `syncAllLeaguesNow()` is also the
+      `POST /admin/sync-leagues` button — cron and button call the same code. Note: the per-league
+      work is called as a genuine cross-bean call into `FantasyLeagueService.syncLeague()`, not
+      from a method living on `FantasyLeagueService` itself — a self-invoked call to a
+      `@Transactional` method skips Spring's proxy and its transaction, which would both defeat
+      per-league failure isolation and (worse) throw `LazyInitializationException` on this
+      scheduler thread (no Open-Session-In-View outside an HTTP request). Keep this in mind for
+      any future scheduled job that loops and calls back into a `@Transactional` service method.
 
 ### P1 — high value: keeps rankings / stats / projections current
 
 - [ ] **Weekly season sync** — Tue ~6am ET, run the full **`syncSeason(currentSeason)`**, NOT the
       partial `syncWeek`. `syncSeason` is idempotent (~1–3 min; unplayed weeks return empty and
       skip) and it's the only path that recomputes `PlayerStat` season totals **and**
-      `assignRanks`. Keep `syncWeek` only for the preseason dry-run it was built for.
-- [ ] **Nightly league roster sync** — `syncLeague` for every added `FantasyLeague` (already
-      idempotent, already picks up waiver adds/drops). Add `FantasyLeague.rostersLastSyncedAt`
-      and show "synced X ago" on `/league/{id}`.
+      `assignRanks`. Keep `syncWeek` only for the preseason dry-run it was built for. (Still not
+      done — `LeagueSyncScheduler` below only covers league standings/rosters, not player stats.)
+- [x] **League roster + scoring sync** — `LeagueSyncScheduler` (`@Scheduled`, cron
+      `app.scheduler.league-sync-cron`, default **Tuesday 7am**) calls its own
+      `syncAllLeaguesNow()`, which re-syncs *every* league for *every* user:
+      standings (wins/losses/ties), scoring (`pointsFor`/`pointsAgainst`), rosters (picks up
+      waiver adds/drops — `syncLeague` already clears+rebuilds), and league status.
+      `rostersLastSyncedAt` stamped + shown as "synced X ago". Went with **weekly**, not nightly —
+      standings/scoring only change once a week's games finish anyway; cadence is a one-line
+      cron-property change (`LEAGUE_SYNC_CRON` env var) if daily ever matters more.
 - [ ] **Weekly re-run predictions** — `syncPredictions(source, target)` with **no retrain**. The
       season *model* barely moves week to week, but Guardrails 3–5 (status discount, depth-chart
       nudge, ADP/FantasyPros blend) use *live* data, so a weekly re-predict keeps situational
