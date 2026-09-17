@@ -1,5 +1,6 @@
 package com.firstember.fantasyfootball.web;
 
+import com.firstember.fantasyfootball.config.SeasonConfig;
 import com.firstember.fantasyfootball.domain.Player;
 import com.firstember.fantasyfootball.domain.PlayerStat;
 import com.firstember.fantasyfootball.ml.ConsistencyStats;
@@ -26,17 +27,20 @@ import java.util.Map;
 @RequestMapping("/admin")
 public class AdminController {
 
+    private final SeasonConfig seasonConfig;
     private final SleeperService sleeperService;
     private final MlPredictionService mlPredictionService;
     private final PlayerStatRepository playerStatRepository;
     private final PlayerWeeklyStatRepository weeklyStatRepository;
     private final LeagueSyncScheduler leagueSyncScheduler;
 
-    public AdminController(SleeperService sleeperService,
+    public AdminController(SeasonConfig seasonConfig,
+                           SleeperService sleeperService,
                            MlPredictionService mlPredictionService,
                            PlayerStatRepository playerStatRepository,
                            PlayerWeeklyStatRepository weeklyStatRepository,
                            LeagueSyncScheduler leagueSyncScheduler) {
+        this.seasonConfig = seasonConfig;
         this.sleeperService = sleeperService;
         this.mlPredictionService = mlPredictionService;
         this.playerStatRepository = playerStatRepository;
@@ -48,6 +52,9 @@ public class AdminController {
     @GetMapping("/sync")
     public String syncPage(Model model) {
         model.addAttribute("message", null);
+        model.addAttribute("nflState", sleeperService.currentNflState());
+        model.addAttribute("sourceSeason", seasonConfig.getSourceSeason());
+        model.addAttribute("targetSeason", seasonConfig.getTargetSeason());
         return "admin/sync";
     }
 

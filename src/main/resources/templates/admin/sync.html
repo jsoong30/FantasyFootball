@@ -41,6 +41,18 @@
         (no API key required). Takes 1–3 minutes.
     </p>
 
+    <!-- Live season/week + app config, from SleeperService.currentNflState() + SeasonConfig -->
+    <p style="color:var(--muted); font-size:12.5px; margin:-16px 0 24px; line-height:1.6;">
+        <span th:if="${nflState != null}">
+            Sleeper says: <strong th:text="${nflState.season}">2026</strong> season,
+            week <strong th:text="${nflState.week}">1</strong>
+            (<span th:text="${nflState.seasonType}">regular</span>).
+        </span>
+        <span th:unless="${nflState != null}">Sleeper's current-week signal is unavailable right now.</span>
+        &middot; App projects <strong th:text="${targetSeason}">2026</strong> from
+        <strong th:text="${sourceSeason}">2025</strong> stats (<code>app.season.*</code>).
+    </p>
+
     <!-- Result banner -->
     <div th:if="${message != null}"
          th:classappend="${success} ? 'pred-banner-live' : ''"

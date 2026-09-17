@@ -295,14 +295,14 @@ py -m uvicorn serve:app --host 0.0.0.0 --port 8000 --reload
   safe to re-poll) and a standalone draft (generic "Team {rosterId}" labels, nothing persisted
   since there's no real league to attach picks to).
 - Suggestions are ranked by a composite score: our own stored `PlayerPrediction` for
-  `TARGET_SEASON` (already ADP-aware via Guardrail 5) × `NEED_CURVE` (roster fill) ×
+  `SeasonConfig`'s target season (already ADP-aware via Guardrail 5) × `NEED_CURVE` (roster fill) ×
   `POSITION_SCARCITY_WEIGHT`. The scarcity weights are the "when does this position get drafted"
   lever: RB 1.0 (baseline), WR 0.92, QB 0.65, **K/DST 0.30** (the need curve only ever
   de-prioritised a *second* K/DST — 0.30 keeps the *first* one out of the suggestions until the
   final rounds, where the need curve's 1.2 factor floats it back to the top of what's left).
 - **ADP-only rows**: `buildSuggestions` also emits rows for players the market is drafting that
   we have **no `PlayerPrediction` for** — mainly the current rookie class (no prior NFL season
-  to project, no synced `TARGET_SEASON` stats). Source is `FantasyCalculatorService.currentAdpEntries`
+  to project, no synced target-season stats). Source is `FantasyCalculatorService.currentAdpEntries`
   (full ADP rows, same cache as `currentAdp`). `projectedPoints` is null; they're ranked by a
   conservative pseudo-score `max(20, 200 - adp) × need × scarcity` that interleaves them among
   real projections at roughly their ADP-implied value (capped so an unproven name never
@@ -455,9 +455,14 @@ Sleeper's stats endpoint does not include the opponent. ESPN's free, keyless sch
 per week. NOTE: use the `cdn.espn.com/core` feed, not `site.api.espn.com/apis/.../scoreboard`
 — the latter is Akamai-Bot-Manager-gated and 403s the JVM (see Known Gotchas).
 
-**Why SOURCE_SEASON=2025, TARGET_SEASON=2026 in PredictionsController?**
+**Why source-season=2025, target-season=2026?**
 The app projects the upcoming season (2026) based on the most recently completed season (2025).
-Update these constants when a new season starts.
+These live in `SeasonConfig` (`app.season.source-season` / `app.season.target-season` in
+application.yml, overridable via `SOURCE_SEASON`/`TARGET_SEASON` env vars) — one place to update
+when a new season starts, injected into `PredictionsController`, `HomeController`, and
+`DraftController` rather than copy-pasted as constants in each. `SleeperService.currentNflState()`
+(GET `/state/nfl`, 15-min cached) surfaces Sleeper's own live season/week on `/admin/sync` next to
+these values, as a sanity check that `app.season.*` hasn't gone stale.
 
 ---
 

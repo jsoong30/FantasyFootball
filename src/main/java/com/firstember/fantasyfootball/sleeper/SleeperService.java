@@ -370,6 +370,38 @@ public class SleeperService {
         return cachedInjuries;
     }
 
+    private static final Duration NFL_STATE_CACHE_TTL = Duration.ofMinutes(15);
+    private volatile SleeperNflStateDTO cachedNflState;
+    private volatile Instant nflStateCachedAt = Instant.EPOCH;
+
+    /**
+     * Sleeper's own "what point in the season is it right now" (keyless, GET /state/nfl):
+     * current season, current week, and season_type (pre/regular/post). Meant as the one place
+     * scheduled jobs and UI defaults read "what week are we in" from instead of doing date math
+     * -- distinct from {@link com.firstember.fantasyfootball.config.SeasonConfig}, which is the
+     * app's own (manually-rolled) source/target season for the ML model, not a live signal.
+     * <p>
+     * Cached for 15 minutes -- this barely changes within a day, unlike injury/depth-chart
+     * signals. Returns the last good value (or {@code null} on a cold-start failure); callers
+     * should treat a null/failed fetch as "fall back to SeasonConfig / a manual default."
+     */
+    public SleeperNflStateDTO currentNflState() {
+        if (cachedNflState != null
+                && Duration.between(nflStateCachedAt, Instant.now()).compareTo(NFL_STATE_CACHE_TTL) < 0) {
+            return cachedNflState;
+        }
+        try {
+            SleeperNflStateDTO state = restTemplate.getForObject(BASE + "/state/nfl", SleeperNflStateDTO.class);
+            if (state != null) {
+                cachedNflState = state;
+                nflStateCachedAt = Instant.now();
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch Sleeper /state/nfl, keeping cached: {}", e.getMessage());
+        }
+        return cachedNflState;
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /** GET /players/nfl → Map<sleeper_player_id, SleeperPlayerDTO> */

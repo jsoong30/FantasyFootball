@@ -1,6 +1,7 @@
 package com.firstember.fantasyfootball.web;
 
 import com.firstember.fantasyfootball.config.AppUserPrincipal;
+import com.firstember.fantasyfootball.config.SeasonConfig;
 import com.firstember.fantasyfootball.domain.FantasyLeague;
 import com.firstember.fantasyfootball.domain.FantasyTeam;
 import com.firstember.fantasyfootball.domain.Player;
@@ -34,9 +35,6 @@ import java.util.*;
 @RequestMapping("/draft")
 public class DraftController {
 
-    // Same target season PredictionsController projects for — a draft happening now is for
-    // the upcoming season, which is exactly what our stored predictions already represent.
-    private static final int TARGET_SEASON = 2026;
     private static final int SUGGESTION_LIMIT = 150;
     private static final int TOP_PICK_COUNT = 3;
     // Softmax temperature (in projected-PPR points) for spreading the top picks' composite
@@ -137,6 +135,7 @@ public class DraftController {
         return reversed;
     }
 
+    private final SeasonConfig seasonConfig;
     private final DraftService draftService;
     private final FantasyLeagueRepository leagueRepository;
     private final FantasyTeamRepository teamRepository;
@@ -144,12 +143,14 @@ public class DraftController {
     private final FantasyCalculatorService fantasyCalculatorService;
     private final SleeperService sleeperService;
 
-    public DraftController(DraftService draftService,
+    public DraftController(SeasonConfig seasonConfig,
+                           DraftService draftService,
                            FantasyLeagueRepository leagueRepository,
                            FantasyTeamRepository teamRepository,
                            PlayerPredictionRepository predictionRepository,
                            FantasyCalculatorService fantasyCalculatorService,
                            SleeperService sleeperService) {
+        this.seasonConfig = seasonConfig;
         this.draftService = draftService;
         this.leagueRepository = leagueRepository;
         this.teamRepository = teamRepository;
@@ -221,7 +222,7 @@ public class DraftController {
             slotGuess.putIfAbsent(slot, (mySlot != null && slot == mySlot) ? "You" : "Team " + slot);
         }
 
-        Map<String, Integer> byeWeeks = sleeperService.byeWeeksByTeam(TARGET_SEASON);
+        Map<String, Integer> byeWeeks = sleeperService.byeWeeksByTeam(seasonConfig.getTargetSeason());
 
         // Live injury designations (Questionable / Out / IR / ...), keyed by Sleeper player id.
         // Cached 5 min in SleeperService, so this is cheap on the 4s poll. Cosmetic — degrade to
@@ -428,7 +429,8 @@ public class DraftController {
                                                          Map<String, SleeperService.InjuryStatus> injuries) {
         Map<String, Double> adp = fantasyCalculatorService.currentAdp(12);
 
-        List<PlayerPrediction> predictions = predictionRepository.findByPredictedSeasonWithPlayer(TARGET_SEASON);
+        List<PlayerPrediction> predictions =
+                predictionRepository.findByPredictedSeasonWithPlayer(seasonConfig.getTargetSeason());
 
         List<Map<String, Object>> suggestions = new ArrayList<>();
         Set<String> haveProjection = new HashSet<>();   // name-keys we already have a prediction row for
@@ -461,7 +463,7 @@ public class DraftController {
 
         // ADP-only rows: players the market is drafting that we have no projection for -- most
         // notably the current rookie class (no prior NFL season to project from, no synced
-        // TARGET_SEASON stats yet). Ranked by ADP alone via a pseudo-score that interleaves them
+        // target-season stats yet). Ranked by ADP alone via a pseudo-score that interleaves them
         // with real projections at roughly their ADP-implied value, then flagged so the UI can
         // show they're market-only, not model output.
         for (FantasyCalculatorService.AdpEntry e : fantasyCalculatorService.currentAdpEntries(12)) {

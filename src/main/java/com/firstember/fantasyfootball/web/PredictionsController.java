@@ -1,5 +1,6 @@
 package com.firstember.fantasyfootball.web;
 
+import com.firstember.fantasyfootball.config.SeasonConfig;
 import com.firstember.fantasyfootball.domain.Player;
 import com.firstember.fantasyfootball.domain.PlayerPrediction;
 import com.firstember.fantasyfootball.domain.PlayerStat;
@@ -24,18 +25,18 @@ import java.util.stream.Collectors;
 @RequestMapping("/predictions")
 public class PredictionsController {
 
-    private static final int TARGET_SEASON = 2026;
-    private static final int SOURCE_SEASON = 2025;
-
+    private final SeasonConfig seasonConfig;
     private final PlayerRepository playerRepository;
     private final PlayerStatRepository playerStatRepository;
     private final PlayerPredictionRepository predictionRepository;
     private final MlPredictionService mlPredictionService;
 
-    public PredictionsController(PlayerRepository playerRepository,
+    public PredictionsController(SeasonConfig seasonConfig,
+                                 PlayerRepository playerRepository,
                                  PlayerStatRepository playerStatRepository,
                                  PlayerPredictionRepository predictionRepository,
                                  MlPredictionService mlPredictionService) {
+        this.seasonConfig = seasonConfig;
         this.playerRepository = playerRepository;
         this.playerStatRepository = playerStatRepository;
         this.predictionRepository = predictionRepository;
@@ -44,17 +45,20 @@ public class PredictionsController {
 
     @GetMapping
     public String index(@RequestParam(required = false) String position, Model model) {
-        // Load 2025 players and their actual stats
-        List<Player> players = new ArrayList<>(playerRepository.findBySeason(SOURCE_SEASON));
+        int sourceSeason = seasonConfig.getSourceSeason();
+        int targetSeason = seasonConfig.getTargetSeason();
+
+        // Load source-season players and their actual stats
+        List<Player> players = new ArrayList<>(playerRepository.findBySeason(sourceSeason));
         List<Long> ids = players.stream().map(Player::getId).collect(Collectors.toList());
 
         Map<Long, PlayerStat> statsMap = playerStatRepository.findByPlayer_IdIn(ids)
                 .stream()
                 .collect(Collectors.toMap(s -> s.getPlayer().getId(), s -> s));
 
-        // Load stored predictions for 2026
+        // Load stored predictions for the target season
         Map<Long, PlayerPrediction> predictionsMap = predictionRepository
-                .findByPredictedSeason(TARGET_SEASON)
+                .findByPredictedSeason(targetSeason)
                 .stream()
                 .collect(Collectors.toMap(p -> p.getPlayer().getId(), p -> p));
 
@@ -92,8 +96,8 @@ public class PredictionsController {
         model.addAttribute("predictionsMap", predictionsMap);
         model.addAttribute("deltaMap", deltaMap);
         model.addAttribute("modelConnected", modelConnected);
-        model.addAttribute("sourceSeason", SOURCE_SEASON);
-        model.addAttribute("targetSeason", TARGET_SEASON);
+        model.addAttribute("sourceSeason", sourceSeason);
+        model.addAttribute("targetSeason", targetSeason);
         return "predictions/index";
     }
 }

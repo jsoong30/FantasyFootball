@@ -26,6 +26,12 @@ fantasypros:
     key: ${FANTASY_PROS_API:}
 
 app:
+  season:
+    # The one place to roll these when a new NFL season starts -- see SeasonConfig javadoc.
+    # target-season = season being projected; source-season = most recent completed season used
+    # as model input. Override via SOURCE_SEASON / TARGET_SEASON env vars without a code change.
+    source-season: ${SOURCE_SEASON:2025}
+    target-season: ${TARGET_SEASON:2026}
   scheduler:
     # Turns off ALL @Scheduled jobs (currently just the weekly league auto-sync) without a code
     # change -- e.g. set false via an env var if you don't want background jobs hitting Sleeper.

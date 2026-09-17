@@ -93,11 +93,15 @@ rankings / stats / league / projections silently drift mid-season. Fixes, by pri
 
 ### P0 — foundational, small, unblocks the rest
 
-- [ ] **`SeasonConfig` bean** (`application.yml` props) to replace the hardcoded
-      `TARGET_SEASON = 2026` / `SOURCE_SEASON = 2025` copy-pasted in `PredictionsController`,
-      `HomeController`, `DraftController`. One place to roll the season.
-- [ ] **Current season/week from Sleeper `/state/nfl`** (keyless: `{season, week, season_type}`).
-      No date math; every scheduled job and UI default reads "we're in 2026 week 2" from here.
+- [x] **`SeasonConfig` bean** (`application.yml` props, `app.season.source-season` /
+      `app.season.target-season`, overridable via `SOURCE_SEASON`/`TARGET_SEASON` env vars) to
+      replace the hardcoded `TARGET_SEASON = 2026` / `SOURCE_SEASON = 2025` copy-pasted in
+      `PredictionsController`, `HomeController`, `DraftController`. One place to roll the season.
+- [x] **Current season/week from Sleeper `/state/nfl`** (keyless: `{season, week, season_type}`) —
+      `SleeperService.currentNflState()`, 15-min cached. Surfaced on `/admin/sync` next to the
+      `SeasonConfig` values so a stale `app.season.*` (season rolled but config not updated) is
+      visible at a glance. Not yet consumed by a scheduled job — no such job exists yet; wire it in
+      when the P1 "Weekly season sync" job below is built.
 - [x] **`@EnableScheduling` + a scheduler bean**, gated by `app.scheduler.enabled` (default
       **true** — deliberately on, not off, since this is a real single-user deploy, not a shared
       dev box several people might run locally; flip to `false` via env var if that changes).
