@@ -70,6 +70,15 @@
     <div th:if="${league != null}">
         <a th:href="@{/league}" style="color:var(--muted); font-size:13px; text-decoration:none;">&larr; All leagues</a>
 
+        <!-- Re-sync result banner -->
+        <div th:if="${syncMessage != null}" class="pred-banner" style="margin:12px 0 0;">
+            <span style="font-size:22px;">ℹ️</span>
+            <div>
+                <strong>Sync</strong>
+                <p th:text="${syncMessage}">Details here.</p>
+            </div>
+        </div>
+
         <div style="display:flex; justify-content:space-between; align-items:flex-end; margin:8px 0 20px; flex-wrap:wrap; gap:12px;">
             <div>
                 <h1 style="margin:0 0 4px;" th:text="${league.name}">League Name</h1>

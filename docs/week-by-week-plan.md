@@ -117,6 +117,7 @@ rankings / stats / league / projections silently drift mid-season. Fixes, by pri
       skip) and it's the only path that recomputes `PlayerStat` season totals **and**
       `assignRanks`. Keep `syncWeek` only for the preseason dry-run it was built for. (Still not
       done — `LeagueSyncScheduler` below only covers league standings/rosters, not player stats.)
+      Make sure that all of the stat displays are updated, not just the stats page. Even the players pages.
 - [x] **League roster + scoring sync** — `LeagueSyncScheduler` (`@Scheduled`, cron
       `app.scheduler.league-sync-cron`, default **Tuesday 7am**) calls its own
       `syncAllLeaguesNow()`, which re-syncs *every* league for *every* user:

@@ -18,8 +18,10 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Syncs Sleeper fantasy leagues by id, private to whichever {@link User} added them -- teams/
@@ -108,16 +110,35 @@ public class FantasyLeagueService {
             team.setPointsFor(r.getPointsFor());
             team.setPointsAgainst(r.getPointsAgainst());
 
-            team.getRosterPlayers().clear();
-            if (r.getPlayers() != null) {
-                for (String sleeperPlayerId : r.getPlayers()) {
+            // Diff against the existing roster rather than clear()-then-recreate: with
+            // orphanRemoval=true, Hibernate's flush order runs collection inserts before
+            // deletes, so wiping and re-adding a player who is still rostered (the overwhelming
+            // common case on a re-sync) tries to INSERT a duplicate (fantasy_team_id,
+            // sleeper_player_id) before the old row's DELETE has flushed, tripping
+            // uq_roster_player. Updating unchanged rows in place and only touching real
+            // adds/drops avoids ever emitting a delete+insert pair for the same natural key.
+            List<String> currentPlayerIds = r.getPlayers() != null ? r.getPlayers() : List.of();
+            Set<String> currentIdSet = new HashSet<>(currentPlayerIds);
+            Map<String, FantasyRosterPlayer> existingByPlayerId = new HashMap<>();
+            for (FantasyRosterPlayer rp : team.getRosterPlayers()) {
+                existingByPlayerId.put(rp.getSleeperPlayerId(), rp);
+            }
+
+            team.getRosterPlayers().removeIf(rp -> !currentIdSet.contains(rp.getSleeperPlayerId()));
+
+            for (String sleeperPlayerId : currentPlayerIds) {
+                boolean starter = r.getStarters() != null && r.getStarters().contains(sleeperPlayerId);
+                FantasyRosterPlayer existing = existingByPlayerId.get(sleeperPlayerId);
+                if (existing != null) {
+                    existing.setStarter(starter);
+                } else {
                     FantasyRosterPlayer rp = new FantasyRosterPlayer();
                     rp.setFantasyTeam(team);
                     rp.setSleeperPlayerId(sleeperPlayerId);
-                    rp.setStarter(r.getStarters() != null && r.getStarters().contains(sleeperPlayerId));
+                    rp.setStarter(starter);
                     team.getRosterPlayers().add(rp);
-                    playersSaved++;
                 }
+                playersSaved++;
             }
 
             teamRepository.save(team);

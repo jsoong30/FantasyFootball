@@ -13,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -79,11 +80,19 @@ public class LeagueController {
         return map;
     }
 
-    /** Re-sync one already-added league — only if it belongs to the current user. */
+    /**
+     * Re-sync one already-added league — only if it belongs to the current user. Captures and
+     * flashes {@code syncLeague}'s result (success or error text) so a failure is never silent —
+     * this used to fire-and-forget the call with no feedback, which made a real failure (a bad
+     * league id, Sleeper being briefly unreachable) look identical to a successful no-op.
+     */
     @PostMapping("/{id}/sync")
-    public String sync(@PathVariable Long id, @AuthenticationPrincipal AppUserPrincipal principal) {
-        leagueRepository.findByIdAndOwner_Id(id, principal.getUser().getId())
-                .ifPresent(league -> fantasyLeagueService.syncLeague(league.getSleeperLeagueId(), principal.getUser()));
+    public String sync(@PathVariable Long id, @AuthenticationPrincipal AppUserPrincipal principal,
+                       RedirectAttributes redirectAttributes) {
+        String result = leagueRepository.findByIdAndOwner_Id(id, principal.getUser().getId())
+                .map(league -> fantasyLeagueService.syncLeague(league.getSleeperLeagueId(), principal.getUser()))
+                .orElse("League not found.");
+        redirectAttributes.addFlashAttribute("syncMessage", result);
         return "redirect:/league/" + id;
     }
 
