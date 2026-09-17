@@ -41,3 +41,5 @@ src/main/resources/application-local.yml
 ### ML pipeline generated artifacts (derived from Postgres via train.py/serve.py; not source) ###
 ml/data/*.csv
 ml/models/*.pkl
+__pycache__/
+*.pyc
