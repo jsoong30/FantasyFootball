@@ -81,13 +81,10 @@ FantasyFootball/
 │   ├── features.py      # Feature engineering shared by train.py and serve.py
 │   ├── train.py         # Training script
 │   ├── serve.py         # FastAPI prediction server
-│   ├── data/            # CSVs exported from admin panel -- actually tracked in git, NOT
-│   │   │                # gitignored despite older docs/.gitignore comments saying otherwise
-│   │   │                # (checked with `git check-ignore`/`git ls-files`). Means every weekly
-│   │   │                # auto-write (WeeklyDataSyncScheduler) produces a real diff to commit.
+│   ├── data/            # CSVs exported from admin panel (gitignored — `ml/data/*.csv`)
 │   │   ├── fantasy_stats_all.csv    # season stats (input to train.py)
 │   │   └── fantasy_weekly_all.csv  # weekly stats with opponent_code (schedule strength)
-│   └── models/          # Trained .pkl files -- also tracked in git, not gitignored
+│   └── models/          # Trained .pkl files (gitignored — `ml/models/*.pkl`)
 │       └── {QB,RB,WR,TE,K,DST}_model.pkl
 ├── docker-compose.yml
 ├── pom.xml
@@ -234,10 +231,8 @@ All data management happens here. Workflow order matters:
   `syncSeason()`, then re-runs predictions with no retrain (Guardrails 3–5 use live data, so this
   keeps situational adjustments fresh — skipped, not failed, if the Python ML server isn't
   reachable), then writes both training CSVs to `ml/data/` via `TrainingDataExportService`
-  (shared with the `/admin/export*` endpoints below, so the two never drift). **Note:**
-  `ml/data/*.csv` are actually tracked in git (not gitignored, despite older comments saying
-  otherwise) — every scheduled/manual run leaves the working tree with a real diff to commit.
-  The "current
+  (shared with the `/admin/export*` endpoints below, so the two never drift; both files are
+  gitignored — `ml/data/*.csv` — so this doesn't leave a working-tree diff behind). The "current
   season" is read live from `SleeperService.currentNflState()` (`/state/nfl`), falling back to
   `SeasonConfig.targetSeason` if that fetch fails. `POST /admin/sync-weekly-data` (admin-only)
   runs the exact same job on demand. Does **not** auto-retrain the model — eyeballing the

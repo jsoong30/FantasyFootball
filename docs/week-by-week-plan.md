@@ -154,9 +154,10 @@ rankings / stats / league / projections silently drift mid-season. Fixes, by pri
 - [x] **Auto-write `ml/data/fantasy_stats_all.csv` + `fantasy_weekly_all.csv`** as part of the
       weekly sync job, via a new `TrainingDataExportService` shared with the `/admin/export*`
       endpoints (same CSV-building code either way, so they can't drift), so a retrain is always
-      just `py train.py`. **Note**: these two CSVs are tracked in git (not gitignored, despite
-      older comments saying otherwise — confirmed with `git check-ignore`), so every run leaves a
-      real diff to commit. **Does not auto-retrain the season model** — eyeballing the walk-forward
+      just `py train.py`. These two CSVs (and the trained `.pkl` models) turned out to be tracked
+      in git despite older comments claiming they were gitignored — fixed by actually adding
+      `ml/data/*.csv` / `ml/models/*.pkl` to `.gitignore` and untracking them, so this job's
+      writes don't produce a working-tree diff. **Does not auto-retrain the season model** — eyeballing the walk-forward
       eval MAE before trusting a new model is a judgment step. (The *weekly*
       model, once it exists, is the thing that should retrain on a schedule.)
 

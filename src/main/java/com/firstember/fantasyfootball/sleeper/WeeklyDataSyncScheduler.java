@@ -33,8 +33,8 @@ import java.nio.file.Path;
  *   <li>Write both training CSVs to {@code ml/data/} so a retrain is always just
  *   {@code py train.py} -- deliberately does NOT retrain the model itself; eyeballing the
  *   walk-forward eval MAE before trusting a new model is a judgment step that stays manual.
- *   Note: these two CSVs are tracked in git (not gitignored, despite older comments saying
- *   otherwise), so every run of this job leaves the working tree with a real diff.</li>
+ *   Both files are gitignored ({@code ml/data/*.csv}), so this doesn't leave a working-tree
+ *   diff behind.</li>
  * </ol>
  * currentSeason comes from {@link SleeperService#currentNflState()} (live) with {@link
  * SeasonConfig#getTargetSeason()} as the fallback if that fetch fails -- this is the "every

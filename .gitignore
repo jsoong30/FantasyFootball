@@ -37,3 +37,7 @@ build/
 
 ### Local Spring profile (machine-specific DB config) ###
 src/main/resources/application-local.yml
+
+### ML pipeline generated artifacts (derived from Postgres via train.py/serve.py; not source) ###
+ml/data/*.csv
+ml/models/*.pkl
