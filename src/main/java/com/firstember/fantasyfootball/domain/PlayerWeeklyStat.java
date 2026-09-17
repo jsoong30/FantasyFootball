@@ -19,6 +19,12 @@ public class PlayerWeeklyStat {
     private Integer season;
     private Integer week;
 
+    // Overall rank among all players with stats that week (1 = top PPR score that week). Set
+    // during sync (SleeperService) -- feeds the weekly model's usage features and "boom week"
+    // views (see docs/week-by-week-plan.md).
+    @Column(name = "rank")
+    private Integer rank;
+
     @Column(name = "total_points")  private Double  totalPoints;
 
     // Passing
@@ -73,6 +79,9 @@ public class PlayerWeeklyStat {
 
     public Integer getWeek()                { return week; }
     public void setWeek(Integer week)       { this.week = week; }
+
+    public Integer getRank()                { return rank; }
+    public void setRank(Integer rank)       { this.rank = rank; }
 
     public Double getTotalPoints()                  { return totalPoints; }
     public void setTotalPoints(Double totalPoints)  { this.totalPoints = totalPoints; }

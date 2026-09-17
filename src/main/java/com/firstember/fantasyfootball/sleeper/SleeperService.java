@@ -197,8 +197,9 @@ public class SleeperService {
         teamRepository.findAll().forEach(t -> teamByCode.put(t.getCode(), t));
         Map<String, String> scheduleMap = persist ? fetchEspnScheduleForWeek(year, week) : Map.of();
 
-        int matched = 0, saved = 0, skipped = 0;
+        int matched = 0, skipped = 0;
         List<String> preview = new ArrayList<>();
+        List<PlayerWeeklyStat> toSave = new ArrayList<>();
 
         for (Map.Entry<String, Map<String, Object>> entry : weekData.entrySet()) {
             String sleeperId = entry.getKey();
@@ -223,8 +224,7 @@ public class SleeperService {
                             .findByPlayer_IdAndSeasonAndWeek(player.getId(), year, week)
                             .orElse(new PlayerWeeklyStat());
                     populateWeeklyStat(w, player, year, week, raw, opponentCode);
-                    weeklyStatRepository.save(w);
-                    saved++;
+                    toSave.add(w);
                 } catch (Exception e) {
                     log.warn("Skipping player {} during week sync: {}", sleeperId, e.getMessage());
                     skipped++;
@@ -240,6 +240,10 @@ public class SleeperService {
                     "Dry run — %s season %d week %d: %d players with stats found, not saved (preseason isn't persisted). Sample: %s",
                     seasonType, year, week, matched, preview.isEmpty() ? "none" : String.join("; ", preview));
         }
+
+        assignWeeklyRanks(toSave);
+        weeklyStatRepository.saveAll(toSave);
+        int saved = toSave.size();
 
         return String.format("Week %d (%d) sync complete — %d players updated, %d skipped.", week, year, saved, skipped);
     }
@@ -500,10 +504,19 @@ public class SleeperService {
                 toSave.add(w);
             }
 
+            assignWeeklyRanks(toSave);
             weeklyStatRepository.saveAll(toSave);
             count += toSave.size();
         }
         return count;
+    }
+
+    /** Ranks a single week's records by totalPoints desc (1 = top score that week), in place. */
+    private void assignWeeklyRanks(List<PlayerWeeklyStat> weekRecords) {
+        weekRecords.sort(Comparator.comparingDouble(
+                (PlayerWeeklyStat w) -> w.getTotalPoints() != null ? w.getTotalPoints() : 0.0)
+                .reversed());
+        for (int i = 0; i < weekRecords.size(); i++) weekRecords.get(i).setRank(i + 1);
     }
 
     /** Populates a single PlayerWeeklyStat from a raw Sleeper stat map. Shared by full-season and single-week sync. */
@@ -798,10 +811,22 @@ public class SleeperService {
 
     private int assignRanks(int year) {
         List<PlayerStat> allStats = playerStatRepository.findBySeasonOrderByRankAsc(year);
-        allStats.sort(Comparator.comparingDouble(
+        Comparator<PlayerStat> byPointsDesc = Comparator.comparingDouble(
                 (PlayerStat s) -> s.getTotalPoints() != null ? s.getTotalPoints() : 0.0)
-                .reversed());
+                .reversed();
+
+        allStats.sort(byPointsDesc);
         for (int i = 0; i < allStats.size(); i++) allStats.get(i).setRank(i + 1);
+
+        // Positional rank: same overall ordering, restarted per position -- previously
+        // recomputed on every /players/{id} request (see PlayersController.detail).
+        Map<String, List<PlayerStat>> byPosition = allStats.stream()
+                .collect(Collectors.groupingBy(s -> s.getPlayer().getPosition()));
+        byPosition.values().forEach(group -> {
+            group.sort(byPointsDesc);
+            for (int i = 0; i < group.size(); i++) group.get(i).setPositionRank(i + 1);
+        });
+
         playerStatRepository.saveAll(allStats);
         return allStats.size();
     }

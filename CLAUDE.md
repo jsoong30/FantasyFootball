@@ -81,10 +81,13 @@ FantasyFootball/
 │   ├── features.py      # Feature engineering shared by train.py and serve.py
 │   ├── train.py         # Training script
 │   ├── serve.py         # FastAPI prediction server
-│   ├── data/            # CSVs exported from admin panel (gitignored)
+│   ├── data/            # CSVs exported from admin panel -- actually tracked in git, NOT
+│   │   │                # gitignored despite older docs/.gitignore comments saying otherwise
+│   │   │                # (checked with `git check-ignore`/`git ls-files`). Means every weekly
+│   │   │                # auto-write (WeeklyDataSyncScheduler) produces a real diff to commit.
 │   │   ├── fantasy_stats_all.csv    # season stats (input to train.py)
 │   │   └── fantasy_weekly_all.csv  # weekly stats with opponent_code (schedule strength)
-│   └── models/          # Trained .pkl files (gitignored)
+│   └── models/          # Trained .pkl files -- also tracked in git, not gitignored
 │       └── {QB,RB,WR,TE,K,DST}_model.pkl
 ├── docker-compose.yml
 ├── pom.xml
@@ -221,8 +224,24 @@ All data management happens here. Workflow order matters:
 - Fetches all 18 regular season weeks from Sleeper API
 - Fetches ESPN schedule for that year (to populate `opponent_code`)
 - Upserts Players, PlayerStats (season totals), PlayerWeeklyStats (per week)
-- Recalculates PPR rank for all players in that season
+- Recalculates overall AND positional PPR rank for all players in that season
+  (`SleeperService.assignRanks` — `PlayerStat.rank` / `PlayerStat.positionRank`), and a
+  within-week overall rank for every `PlayerWeeklyStat` row
 - Takes 1–3 minutes per season (18 Sleeper API calls + 18 ESPN calls)
+- **Auto-syncs weekly**: `WeeklyDataSyncScheduler` (`@Scheduled`, cron
+  `app.scheduler.stats-sync-cron`, default Tuesday 6am — an hour ahead of the league sync, no
+  ordering dependency between them) re-syncs the current season via this exact same
+  `syncSeason()`, then re-runs predictions with no retrain (Guardrails 3–5 use live data, so this
+  keeps situational adjustments fresh — skipped, not failed, if the Python ML server isn't
+  reachable), then writes both training CSVs to `ml/data/` via `TrainingDataExportService`
+  (shared with the `/admin/export*` endpoints below, so the two never drift). **Note:**
+  `ml/data/*.csv` are actually tracked in git (not gitignored, despite older comments saying
+  otherwise) — every scheduled/manual run leaves the working tree with a real diff to commit.
+  The "current
+  season" is read live from `SleeperService.currentNflState()` (`/state/nfl`), falling back to
+  `SeasonConfig.targetSeason` if that fetch fails. `POST /admin/sync-weekly-data` (admin-only)
+  runs the exact same job on demand. Does **not** auto-retrain the model — eyeballing the
+  walk-forward eval MAE before trusting a new model stays a manual `py train.py` step.
 
 ### 2. Sync Opponent Data (`POST /admin/sync-opponents?year=XXXX`)
 - Backfills `opponent_code` on existing `PlayerWeeklyStat` rows for seasons synced before
@@ -250,6 +269,10 @@ py train.py
 # Ctrl+C the running uvicorn, then:
 py -m uvicorn serve:app --host 0.0.0.0 --port 8000 --reload
 ```
+Or, without restarting uvicorn: `POST http://localhost:8000/reload-models` re-runs
+`_load_models()` in place, picking up a fresh `train.py` run's `.pkl` files without dropping the
+server (handy since a full restart briefly breaks `/admin/predict` and the live draft board's
+suggestions, which both call this server).
 
 ### 7. Sync Predictions (`POST /admin/predict`)
 - `sourceSeason` (default 2025): which season's stats to use as input
@@ -504,6 +527,7 @@ these values, as a sanity check that `app.season.*` hasn't gone stale.
 | POST | `/admin/sync?year=` | Trigger Sleeper sync |
 | POST | `/admin/sync-opponents?year=` | Backfill opponent_code via ESPN |
 | POST | `/admin/sync-leagues` | Re-sync every league for every user now (also runs weekly on a schedule) |
+| POST | `/admin/sync-weekly-data` | Full player-stats resync + prediction refresh + CSV export now (also runs weekly on a schedule) |
 | POST | `/admin/predict?sourceSeason=&targetSeason=` | Run ML prediction sync |
 | GET | `/admin/export` | Download season stats CSV |
 | GET | `/admin/export?year=` | Download single-season CSV |
@@ -526,6 +550,7 @@ these values, as a sanity check that `app.season.*` hasn't gone stale.
 | GET | `/health` | Check loaded models |
 | POST | `/predict/season` | Season projection for all players |
 | POST | `/predict/week` | Week-by-week (stub, not implemented) |
+| POST | `/reload-models` | Re-run `_load_models()` in place after a retrain, without restarting uvicorn |
 
 ---
 

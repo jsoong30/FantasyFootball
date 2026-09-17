@@ -71,14 +71,17 @@ public class PlayersController {
                 ? playerStatRepository.findByPlayer_IdAndSeason(id, season).orElse(null)
                 : null;
 
-        // How many players at the same position scored more this season?
-        int positionRank = 1;
-        if (stat != null && stat.getTotalPoints() != null) {
+        // Persisted by SleeperService.assignRanks on every sync. Falls back to an on-the-fly
+        // count for rows synced before positionRank existed (re-sync clears the need for this).
+        Integer positionRank = stat != null ? stat.getPositionRank() : null;
+        if (positionRank == null && stat != null && stat.getTotalPoints() != null) {
             List<PlayerStat> posStats = playerStatRepository
                     .findByPlayer_PositionAndSeasonOrderByRankAsc(player.getPosition(), season);
             positionRank = (int) posStats.stream()
                     .filter(s -> s.getTotalPoints() != null && s.getTotalPoints() > stat.getTotalPoints())
                     .count() + 1;
+        } else if (positionRank == null) {
+            positionRank = 1;
         }
 
         List<PlayerWeeklyStat> weeklyStats = season != null

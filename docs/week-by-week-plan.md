@@ -116,12 +116,17 @@ rankings / stats / league / projections silently drift mid-season. Fixes, by pri
 
 ### P1 — high value: keeps rankings / stats / projections current
 
-- [ ] **Weekly season sync** — Tue ~6am ET, run the full **`syncSeason(currentSeason)`**, NOT the
-      partial `syncWeek`. `syncSeason` is idempotent (~1–3 min; unplayed weeks return empty and
-      skip) and it's the only path that recomputes `PlayerStat` season totals **and**
-      `assignRanks`. Keep `syncWeek` only for the preseason dry-run it was built for. (Still not
-      done — `LeagueSyncScheduler` below only covers league standings/rosters, not player stats.)
-      Make sure that all of the stat displays are updated, not just the stats page. Even the players pages.
+- [x] **Weekly season sync** — `WeeklyDataSyncScheduler` (`@Scheduled`, cron
+      `app.scheduler.stats-sync-cron`, default **Tuesday 6am**, an hour ahead of the league sync)
+      runs the full **`syncSeason(currentSeason)`**, NOT the partial `syncWeek`. `currentSeason`
+      comes from `SleeperService.currentNflState()` (live `/state/nfl`), falling back to
+      `SeasonConfig.targetSeason` if that fetch fails. `syncSeason` is idempotent and recomputes
+      `PlayerStat` totals + overall/positional rank + per-week `PlayerWeeklyStat` rank — every page
+      that reads those tables (players list/detail, stats, rankings, predictions) picks it up
+      automatically since they all read the same persisted rows; no per-page changes needed.
+      `POST /admin/sync-weekly-data` (admin-only) runs the same job on demand. Bundled into the
+      same job: the next two items below (predictions re-run, CSV export) — see
+      `WeeklyDataSyncScheduler` javadoc.
 - [x] **League roster + scoring sync** — `LeagueSyncScheduler` (`@Scheduled`, cron
       `app.scheduler.league-sync-cron`, default **Tuesday 7am**) calls its own
       `syncAllLeaguesNow()`, which re-syncs *every* league for *every* user:
@@ -130,21 +135,29 @@ rankings / stats / league / projections silently drift mid-season. Fixes, by pri
       `rostersLastSyncedAt` stamped + shown as "synced X ago". Went with **weekly**, not nightly —
       standings/scoring only change once a week's games finish anyway; cadence is a one-line
       cron-property change (`LEAGUE_SYNC_CRON` env var) if daily ever matters more.
-- [ ] **Weekly re-run predictions** — `syncPredictions(source, target)` with **no retrain**. The
-      season *model* barely moves week to week, but Guardrails 3–5 (status discount, depth-chart
-      nudge, ADP/FantasyPros blend) use *live* data, so a weekly re-predict keeps situational
-      adjustments (Gibbs/Bijan-style) fresh for free.
-- [ ] **`POST /reload-models` on `serve.py`** — `uvicorn --reload` watches `.py`, not `.pkl`, so a
-      retrain currently needs a manual server bounce. A 5-line endpoint re-running `_load_models()`
-      removes that step and lets a future retrain job chain cleanly.
-- [ ] **Persist ranks that are currently on-the-fly / missing**: positional rank on `PlayerStat`
-      (compute in `assignRanks`; `PlayersController.detail` recomputes it every request), and a
-      `rank` column on `PlayerWeeklyStat` (rank within that week, set during sync — feeds the
-      weekly model's usage features and "boom week" views).
-- [ ] **Auto-write `ml/data/fantasy_stats_all.csv` + `fantasy_weekly_all.csv`** as part of the
-      weekly sync job (reuse the export logic, write to file instead of HTTP response), so a
-      retrain is always just `py train.py`. **Do not auto-retrain the season model** — eyeballing
-      the walk-forward eval MAE before trusting a new model is a judgment step. (The *weekly*
+- [x] **Weekly re-run predictions** — `WeeklyDataSyncScheduler` calls `syncPredictions(source,
+      target)` with **no retrain**, using `SeasonConfig`'s source/target. The season *model*
+      barely moves week to week, but Guardrails 3–5 (status discount, depth-chart nudge,
+      ADP/FantasyPros blend) use *live* data, so a weekly re-predict keeps situational adjustments
+      (Gibbs/Bijan-style) fresh for free. Skipped (not failed) if `MlPredictionService.isModelConnected()`
+      is false — see the plan's "Reliability caveat": this job assumes the app is up, not
+      necessarily uvicorn too. Verified: with uvicorn down, the job completed the stats sync + CSV
+      export and left existing `PlayerPrediction` rows untouched rather than wiping them.
+- [x] **`POST /reload-models` on `serve.py`** — `uvicorn --reload` watches `.py`, not `.pkl`, so a
+      retrain currently needs a manual server bounce. A small endpoint re-running `_load_models()`
+      removes that step. Verified locally: `POST /reload-models` → `{"status":"reloaded",...}`.
+- [x] **Persist ranks that are currently on-the-fly / missing**: positional rank on `PlayerStat`
+      (`SleeperService.assignRanks`, replacing `PlayersController.detail`'s per-request
+      recompute — kept as a fallback for rows synced before this existed), and a `rank` column on
+      `PlayerWeeklyStat` (rank within that week, set during sync — feeds the weekly model's usage
+      features and "boom week" views). Verified against real 2026 week-1 data post-sync.
+- [x] **Auto-write `ml/data/fantasy_stats_all.csv` + `fantasy_weekly_all.csv`** as part of the
+      weekly sync job, via a new `TrainingDataExportService` shared with the `/admin/export*`
+      endpoints (same CSV-building code either way, so they can't drift), so a retrain is always
+      just `py train.py`. **Note**: these two CSVs are tracked in git (not gitignored, despite
+      older comments saying otherwise — confirmed with `git check-ignore`), so every run leaves a
+      real diff to commit. **Does not auto-retrain the season model** — eyeballing the walk-forward
+      eval MAE before trusting a new model is a judgment step. (The *weekly*
       model, once it exists, is the thing that should retrain on a schedule.)
 
 ### P2 — later / nice-to-have

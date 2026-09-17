@@ -220,6 +220,37 @@
         </p>
     </div>
 
+    <!-- Weekly player-data auto-sync card -->
+    <div class="card" style="margin-top:28px;">
+        <h2 style="margin:0 0 8px; font-size:1.05rem;">Sync Player Data (Full)</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0 0 16px; line-height:1.6;">
+            Full player-stats refresh: re-syncs the current season (stats, ranks, positional
+            ranks), re-runs predictions with live guardrail data (no retrain), and writes both
+            training CSVs to <code>ml/data/</code>. Runs automatically every
+            <strong>Tuesday at 6am</strong>; this button runs the exact same job on demand. The
+            current season is read live from Sleeper, falling back to the configured target
+            season if that fetch fails.
+        </p>
+
+        <!-- Result banner -->
+        <div th:if="${weeklyDataMessage != null}"
+             th:classappend="${weeklyDataSuccess} ? 'pred-banner-live' : ''"
+             class="pred-banner"
+             style="margin-bottom:16px;">
+            <span style="font-size:22px;" th:text="${weeklyDataSuccess} ? '✅' : '❌'">✅</span>
+            <div>
+                <strong th:text="${weeklyDataSuccess} ? 'Player data sync complete' : 'Sync failed'">Result</strong>
+                <p th:text="${weeklyDataMessage}">Details here.</p>
+            </div>
+        </div>
+
+        <form th:action="@{/admin/sync-weekly-data}" method="post">
+            <button type="submit" class="btn primary" style="padding:9px 22px;">
+                Sync Player Data Now
+            </button>
+        </form>
+    </div>
+
     <!-- League auto-sync card -->
     <div class="card" style="margin-top:28px;">
         <h2 style="margin:0 0 8px; font-size:1.05rem;">Sync All Leagues</h2>

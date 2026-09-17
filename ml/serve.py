@@ -5,6 +5,7 @@ Endpoints:
   GET  /health                → model status
   POST /predict/season        → season-total projections (current)
   POST /predict/week          → week-by-week projections (not yet implemented)
+  POST /reload-models         → re-run _load_models() to pick up a fresh train.py run
 
 Start:
   uvicorn serve:app --host 0.0.0.0 --port 8000 --reload
@@ -290,3 +291,15 @@ def predict_season(request: SeasonPredictionRequest) -> SeasonPredictionResponse
 def predict_week() -> dict:
     """Week-by-week prediction — not yet implemented."""
     return {"error": "Week-by-week prediction not yet implemented."}
+
+
+@app.post("/reload-models")
+def reload_models() -> dict:
+    """
+    Re-runs _load_models() so a fresh `py train.py` run's .pkl files are picked up without
+    restarting uvicorn. `--reload` watches .py files but not .pkl model files (see CLAUDE.md
+    "Python ML server"), so this used to require a manual Ctrl+C + restart after every retrain.
+    """
+    _models.clear()
+    _load_models()
+    return {"status": "reloaded", "loaded_models": list(_models.keys())}

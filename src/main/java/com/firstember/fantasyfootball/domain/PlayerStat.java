@@ -17,6 +17,12 @@ public class PlayerStat {
     private Integer season;
     private Integer rank;
 
+    // Rank within this player's position for this season (1 = PPR position leader). Persisted by
+    // SleeperService.assignRanks alongside the overall `rank` -- previously recomputed on every
+    // /players/{id} request by comparing totalPoints against every other player at the position.
+    @Column(name = "position_rank")
+    private Integer positionRank;
+
     @Column(name = "total_points")
     private Double totalPoints;
 
@@ -90,6 +96,9 @@ public class PlayerStat {
 
     public Integer getRank() { return rank; }
     public void setRank(Integer rank) { this.rank = rank; }
+
+    public Integer getPositionRank() { return positionRank; }
+    public void setPositionRank(Integer positionRank) { this.positionRank = positionRank; }
 
     public Double getTotalPoints() { return totalPoints; }
     public void setTotalPoints(Double totalPoints) { this.totalPoints = totalPoints; }

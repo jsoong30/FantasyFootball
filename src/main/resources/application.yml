@@ -33,12 +33,16 @@ app:
     source-season: ${SOURCE_SEASON:2025}
     target-season: ${TARGET_SEASON:2026}
   scheduler:
-    # Turns off ALL @Scheduled jobs (currently just the weekly league auto-sync) without a code
-    # change -- e.g. set false via an env var if you don't want background jobs hitting Sleeper.
+    # Turns off ALL @Scheduled jobs without a code change -- e.g. set false via an env var if you
+    # don't want background jobs hitting Sleeper/the ML server.
     enabled: ${SCHEDULER_ENABLED:true}
     # Cron for LeagueSyncScheduler: Tuesday 7am by default, after Sun/Mon (and MNF) games have
     # posted final stats/standings. Spring cron format: second minute hour day-of-month month day-of-week.
     league-sync-cron: ${LEAGUE_SYNC_CRON:0 0 7 * * TUE}
+    # Cron for WeeklyDataSyncScheduler (player stats/ranks resync + prediction refresh + CSV
+    # export): Tuesday 6am, an hour ahead of the league sync -- no ordering dependency, just
+    # keeps this heavier job (1-3 min of Sleeper+ESPN calls) out of that one's window.
+    stats-sync-cron: ${STATS_SYNC_CRON:0 0 6 * * TUE}
 
 
 
